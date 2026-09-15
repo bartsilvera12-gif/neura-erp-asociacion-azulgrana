@@ -28,9 +28,13 @@ import { randomBytes } from "node:crypto";
 
 const SCHEMA = "asociacionazulgranaerp";
 const APP_URL = "http://asociacionhernandariasazulgrana.neura.com.py";
+const CLIENT_NAME = "Asociación Hernandarias Azulgrana";
 
 const FIJAS = {
   APP_DB_SCHEMA: SCHEMA,
+  NEURA_CLIENT_SCHEMA: SCHEMA,
+  NEXT_PUBLIC_NEURA_CLIENT_SCHEMA: SCHEMA,
+  NEURA_CLIENT_NAME: CLIENT_NAME,
   NEXT_PUBLIC_APP_URL: APP_URL,
 };
 
