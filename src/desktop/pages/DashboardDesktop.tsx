@@ -2668,7 +2668,10 @@ export default function DashboardPage() {
   const nivel = usuarioActivo?.nivel ?? "administrador";
 
   const baseTabs: TabDash[] = dashScope.kind === "scoped" ? dashScope.tabs : TAB_VALID;
-  const effectiveTabs: TabDash[] = baseTabs;
+  // Además del scope de la empresa, esta instalación solo expone Comercial y Financiero.
+  // Filtramos acá para que aunque el resolver devuelva más slugs (catálogo sin recortar),
+  // el sidebar del dashboard no muestre pestañas que no queremos.
+  const effectiveTabs: TabDash[] = baseTabs.filter((t) => TAB_VALID.includes(t));
   const showTabNav = !(dashScope.kind === "scoped" && effectiveTabs.length === 1);
 
   const TAB_META: Partial<Record<TabDash, { label: string; Icon: (props: IconProps) => React.ReactElement }>> = {
