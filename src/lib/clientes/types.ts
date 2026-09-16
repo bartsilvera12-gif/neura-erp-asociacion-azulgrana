@@ -73,6 +73,11 @@ export interface Cliente {
   /** Clasificación operativa (marketing, saas, branding, web, otro) */
   tipo_servicio_cliente?: TipoServicioCliente;
 
+  /** N° de carnet de socio (único por empresa). */
+  numero_socio?: number | null;
+  /** Categoría de socio: 'SOCIO FUNDADOR' | 'ACTIVO' | 'RESERVADO' | otro slug definido por la asociación. */
+  tipo_socio?: string | null;
+
   /** Usuario que creó el cliente (auth.users.id) */
   created_by_user_id?:   string | null;
   /** Nombre del creador para display (denormalizado) */

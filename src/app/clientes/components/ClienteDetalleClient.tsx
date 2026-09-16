@@ -166,6 +166,8 @@ const CAMPO_HISTORIAL: Record<string, string> = {
   moneda_preferida: "Moneda",
   vendedor_usuario_id: "Vendedor",
   project_manager_id: "Project Manager",
+  numero_socio: "N° Socio",
+  tipo_socio: "Tipo de socio",
 };
 
 function resumenCambiosHistorial(detalle: Record<string, unknown> | null | undefined): {
@@ -349,6 +351,8 @@ export default function ClienteDetalleClient({
     vendedor_usuario_id:   "",
     project_manager_id:    "",
     tipo_servicio_cliente: "" as string,
+    numero_socio:          "" as string,
+    tipo_socio:            "" as string,
     estado:                "activo" as Cliente["estado"],
     sifen_receptor_manual: false,
     sifen_receptor_naturaleza: "" as string,
@@ -543,6 +547,8 @@ export default function ClienteDetalleClient({
         vendedor_usuario_id:  c.vendedor_usuario_id ?? "",
         project_manager_id:   c.project_manager_id  ?? "",
         tipo_servicio_cliente: c.tipo_servicio_cliente ?? "",
+        numero_socio:         c.numero_socio != null ? String(c.numero_socio) : "",
+        tipo_socio:           c.tipo_socio ?? "",
         estado:               c.estado,
         sifen_receptor_manual: Boolean(c.sifen_receptor_manual),
         sifen_receptor_naturaleza: c.sifen_receptor_naturaleza ?? "",
@@ -829,6 +835,8 @@ export default function ClienteDetalleClient({
         vendedor_usuario_id: form.vendedor_usuario_id.trim() || null,
         project_manager_id:  form.project_manager_id.trim() || null,
         tipo_servicio_cliente: tipoTs || null,
+        numero_socio:        form.numero_socio.trim() === "" ? null : Math.max(1, parseInt(form.numero_socio, 10) || 0) || null,
+        tipo_socio:          form.tipo_socio.trim() || null,
         estado:              form.estado,
         ...sifenManualPayload,
       });
@@ -1736,6 +1744,38 @@ export default function ClienteDetalleClient({
                       </option>
                     ))}
                   </select>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div>
+                    <label className={labelClass}>N° Socio</label>
+                    <input
+                      type="number"
+                      min={1}
+                      step={1}
+                      name="numero_socio"
+                      value={form.numero_socio}
+                      onChange={(e) =>
+                        setForm((prev) => ({ ...prev, numero_socio: e.target.value.replace(/[^0-9]/g, "") }))
+                      }
+                      placeholder="Ej. 123"
+                      className={inputClass}
+                    />
+                  </div>
+                  <div>
+                    <label className={labelClass}>Tipo de socio</label>
+                    <select
+                      name="tipo_socio"
+                      value={form.tipo_socio}
+                      onChange={(e) => setForm((prev) => ({ ...prev, tipo_socio: e.target.value }))}
+                      className={inputClass}
+                    >
+                      <option value="">— Sin categoría —</option>
+                      <option value="SOCIO FUNDADOR">SOCIO FUNDADOR</option>
+                      <option value="ACTIVO">ACTIVO</option>
+                      <option value="RESERVADO">RESERVADO</option>
+                    </select>
+                  </div>
                 </div>
 
                 {/* Fila principal: nombre + documento tributario (RUC empresa / CI persona) */}

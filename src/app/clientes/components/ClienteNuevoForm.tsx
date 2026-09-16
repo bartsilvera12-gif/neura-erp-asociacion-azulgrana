@@ -101,6 +101,8 @@ function ClienteNuevoFormInner({ variant = "page", onCreated, onCancel, fromPros
     origen: "MANUAL" as OrigenCliente,
     prospecto_id: null as string | null,
     tipo_servicio_cliente: "" as string,
+    numero_socio: "" as string,
+    tipo_socio: "" as string,
     estado: "activo" as "activo" | "inactivo",
     sifen_receptor_manual: false,
     sifen_receptor_naturaleza: "" as string,
@@ -355,6 +357,8 @@ function ClienteNuevoFormInner({ variant = "page", onCreated, onCancel, fromPros
       estado: form.estado,
       plan_comercial_id: formSusc.plan_id.trim() || null,
       vendedor_usuario_id: form.vendedor_usuario_id.trim() || null,
+      numero_socio: form.numero_socio.trim() === "" ? null : Math.max(1, parseInt(form.numero_socio, 10) || 0) || null,
+      tipo_socio: form.tipo_socio.trim() || null,
       ...sifenManualCreate,
     });
 
@@ -570,6 +574,36 @@ function ClienteNuevoFormInner({ variant = "page", onCreated, onCancel, fromPros
                   </option>
                 ))}
               </select>
+            </div>
+
+            <div className="grid gap-4 sm:grid-cols-2">
+              <div>
+                <label className={labelClass}>N° Socio</label>
+                <input
+                  type="number"
+                  min={1}
+                  step={1}
+                  name="numero_socio"
+                  value={form.numero_socio}
+                  onChange={(e) => setForm((prev) => ({ ...prev, numero_socio: e.target.value.replace(/[^0-9]/g, "") }))}
+                  placeholder="Ej. 123"
+                  className={inputClass}
+                />
+              </div>
+              <div>
+                <label className={labelClass}>Tipo de socio</label>
+                <select
+                  name="tipo_socio"
+                  value={form.tipo_socio}
+                  onChange={(e) => setForm((prev) => ({ ...prev, tipo_socio: e.target.value }))}
+                  className={inputClass}
+                >
+                  <option value="">— Sin categoría —</option>
+                  <option value="SOCIO FUNDADOR">SOCIO FUNDADOR</option>
+                  <option value="ACTIVO">ACTIVO</option>
+                  <option value="RESERVADO">RESERVADO</option>
+                </select>
+              </div>
             </div>
 
             {/* Contacto directo: persona de contacto (solo empresa) + teléfono con formato +595 */}

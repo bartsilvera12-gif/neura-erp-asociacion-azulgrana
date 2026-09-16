@@ -245,6 +245,8 @@ export async function POST(request: NextRequest) {
       plan_comercial_id,
       vendedor_asignado,
       vendedor_usuario_id,
+      numero_socio,
+      tipo_socio,
     } = body;
 
     const uuidRe = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -327,6 +329,12 @@ export async function POST(request: NextRequest) {
       estado:               estado === "inactivo" ? "inactivo" : "activo",
       vendedor_asignado:    typeof vendedor_asignado === "string" && vendedor_asignado.trim() ? vendedor_asignado.trim() : null,
       vendedor_usuario_id:  vendedorUsuarioId,
+      numero_socio:         (() => {
+        if (numero_socio == null || numero_socio === "") return null;
+        const n = Number(numero_socio);
+        return Number.isFinite(n) && n > 0 ? Math.floor(n) : null;
+      })(),
+      tipo_socio:           typeof tipo_socio === "string" && tipo_socio.trim() ? tipo_socio.trim() : null,
     };
 
     if (typeof sifen_receptor_extranjero === "boolean") {

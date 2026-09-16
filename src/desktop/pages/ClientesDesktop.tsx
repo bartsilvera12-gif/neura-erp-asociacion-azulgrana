@@ -106,8 +106,10 @@ function TipoServicioCell({ slug, mapNombreTipo }: { slug: string | null; mapNom
 const CLIENTES_COLUMNAS_STORAGE_KEY = "neura.erp.clientes.columnas.v1";
 
 type ClienteColumnKey =
+  | "numero_socio"
   | "codigo"
   | "empresa_nombre"
+  | "tipo_socio"
   | "contacto"
   | "telefono"
   | "plan_activo"
@@ -132,16 +134,13 @@ type ClienteColumnDef = {
 };
 
 const DEFAULT_VISIBLE_COLUMN_KEYS: ClienteColumnKey[] = [
-  "codigo",
+  "numero_socio",
   "empresa_nombre",
+  "tipo_socio",
   "contacto",
   "telefono",
-  "plan_activo",
-  "origen",
-  "tipo_servicio",
   "estado",
   "desde",
-  "project_manager",
 ];
 
 function normalizeVisibleColumnKeys(raw: unknown, columns: ClienteColumnDef[]): ClienteColumnKey[] {
@@ -183,11 +182,42 @@ function VendedorResponsableCell({ cliente }: { cliente: Cliente }) {
   return <span className="text-slate-400">Sin asignar</span>;
 }
 
+function BadgeTipoSocio({ tipo }: { tipo: string | null }) {
+  const t = (tipo ?? "").trim().toUpperCase();
+  if (!t) return <span className="text-xs text-slate-400">—</span>;
+  const cfg: Record<string, string> = {
+    "SOCIO FUNDADOR": "border-amber-200 bg-amber-50 text-amber-800",
+    "ACTIVO": "border-emerald-200 bg-emerald-50 text-emerald-700",
+    "RESERVADO": "border-slate-200 bg-slate-50 text-slate-600",
+  };
+  const cls = cfg[t] ?? "border-violet-200 bg-violet-50 text-violet-700";
+  return (
+    <span className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide ${cls}`}>
+      {t}
+    </span>
+  );
+}
+
 function buildClienteColumns(mapNombreTipo: Record<string, string>): ClienteColumnDef[] {
   const th =
     "text-left text-[10px] font-semibold uppercase tracking-[0.08em] text-slate-500 px-3 py-2 whitespace-nowrap";
   const td = "px-3 py-2.5";
   return [
+    {
+      key: "numero_socio",
+      label: "N° Socio",
+      visibleDefault: true,
+      headerClassName: th,
+      className: `${td} tabular-nums`,
+      render: (c) =>
+        c.numero_socio != null ? (
+          <span className="inline-flex items-center rounded-md border border-[#4FAEB2]/30 bg-[#4FAEB2]/10 px-2 py-0.5 font-mono text-[11px] font-semibold text-[#3F8E91]">
+            {String(c.numero_socio).padStart(3, "0")}
+          </span>
+        ) : (
+          <span className="text-xs text-slate-400">—</span>
+        ),
+    },
     {
       key: "codigo",
       label: "Código",
@@ -239,6 +269,14 @@ function buildClienteColumns(mapNombreTipo: Record<string, string>): ClienteColu
           </div>
         );
       },
+    },
+    {
+      key: "tipo_socio",
+      label: "Tipo socio",
+      visibleDefault: true,
+      headerClassName: th,
+      className: `${td} whitespace-nowrap`,
+      render: (c) => <BadgeTipoSocio tipo={c.tipo_socio ?? null} />,
     },
     {
       key: "contacto",
@@ -441,7 +479,20 @@ export default function ClientesPage() {
     }
   }, [searchParams]);
 
-  const filtrados = clientes.filter((c) => {
+  const filtrados = clientes
+    .slice()
+    .sort((a, b) => {
+      // N° Socio ascendente por defecto; los sin número quedan al final.
+      const na = a.numero_socio;
+      const nb = b.numero_socio;
+      const hasA = typeof na === "number" && Number.isFinite(na);
+      const hasB = typeof nb === "number" && Number.isFinite(nb);
+      if (hasA && hasB) return (na as number) - (nb as number);
+      if (hasA) return -1;
+      if (hasB) return 1;
+      return clienteNombre(a).localeCompare(clienteNombre(b));
+    })
+    .filter((c) => {
     const nombre = clienteNombre(c).toLowerCase();
     const q      = busqueda.toLowerCase();
     if (q) {
@@ -451,6 +502,8 @@ export default function ClientesPage() {
         (c.empresa         ?? "").toLowerCase().includes(q) ||
         (c.razon_social    ?? "").toLowerCase().includes(q) ||
         (c.codigo_cliente ?? "").toLowerCase().includes(q) ||
+        (c.numero_socio != null ? String(c.numero_socio) : "").includes(q) ||
+        (c.tipo_socio ?? "").toLowerCase().includes(q) ||
         (c.email          ?? "").toLowerCase().includes(q) ||
         (c.telefono       ?? "").toLowerCase().includes(q) ||
         (c.ruc            ?? "").toLowerCase().includes(q) ||

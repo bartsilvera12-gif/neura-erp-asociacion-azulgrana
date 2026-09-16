@@ -11,6 +11,8 @@ interface SupabaseRow {
   empresa_id:              string | null;
   tipo_cliente:            string | null;
   tipo_servicio_cliente:   string | null;
+  numero_socio:            number | string | null;
+  tipo_socio:              string | null;
   created_by_user_id:      string | null;
   created_by_nombre:       string | null;
   deleted_at:              string | null;
@@ -119,6 +121,12 @@ function rowToCliente(row: SupabaseRow): Cliente {
     estado:              (row.estado === "inactivo" ? "inactivo" : "activo") as EstadoCliente,
     notas:               parseNotas(row.notas),
     tipo_servicio_cliente: (row.tipo_servicio_cliente as Cliente["tipo_servicio_cliente"]) ?? undefined,
+    numero_socio:        (() => {
+      if (row.numero_socio == null || row.numero_socio === "") return null;
+      const n = typeof row.numero_socio === "number" ? row.numero_socio : parseInt(String(row.numero_socio), 10);
+      return Number.isFinite(n) ? n : null;
+    })(),
+    tipo_socio:          row.tipo_socio == null || String(row.tipo_socio).trim() === "" ? null : String(row.tipo_socio).trim(),
     created_by_user_id:  row.created_by_user_id ?? undefined,
     created_by_nombre:   row.created_by_nombre ?? undefined,
     deleted_at:          row.deleted_at ?? undefined,
@@ -302,6 +310,8 @@ export async function saveCliente(datos: NuevoClienteData): Promise<Cliente | nu
     origen:             datos.origen ?? "MANUAL",
     prospecto_id:       datos.prospecto_id ?? null,
     estado:             datos.estado ?? "activo",
+    numero_socio:       datos.numero_socio ?? null,
+    tipo_socio:         datos.tipo_socio ?? null,
   };
   if (datos.sifen_receptor_extranjero === true) insert.sifen_receptor_extranjero = true;
   if (datos.sifen_receptor_extranjero === false) insert.sifen_receptor_extranjero = false;
@@ -463,6 +473,18 @@ export function construirPatchActualizacionCliente(datos: ActualizarClienteInput
   }
   if (datos.estado !== undefined) patch.estado = datos.estado ?? null;
   if (datos.tipo_servicio_cliente !== undefined) patch.tipo_servicio_cliente = datos.tipo_servicio_cliente ?? null;
+  if (datos.numero_socio !== undefined) {
+    if (datos.numero_socio == null || (datos.numero_socio as unknown) === "") {
+      patch.numero_socio = null;
+    } else {
+      const n = Number(datos.numero_socio);
+      patch.numero_socio = Number.isFinite(n) && n > 0 ? Math.floor(n) : null;
+    }
+  }
+  if (datos.tipo_socio !== undefined) {
+    const t = datos.tipo_socio == null ? "" : String(datos.tipo_socio).trim();
+    patch.tipo_socio = t ? t : null;
+  }
   patch.updated_at = new Date().toISOString();
   return patch;
 }

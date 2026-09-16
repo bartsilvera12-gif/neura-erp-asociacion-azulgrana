@@ -112,6 +112,8 @@ export async function apiCreateCliente(data: {
   sifen_direccion_de?: string | null;
   sifen_num_casa_de?: number | null;
   sifen_descripcion_tipo_doc?: string | null;
+  numero_socio?: number | null;
+  tipo_socio?: string | null;
 }): Promise<
   | { ok: true; data: { id: string; [key: string]: unknown } }
   | { ok: false; error: string; code?: string; hay_inactivo?: boolean; matches?: DuplicadoMatchClient[] }
