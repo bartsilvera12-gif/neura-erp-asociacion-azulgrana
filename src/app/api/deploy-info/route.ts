@@ -30,5 +30,6 @@ export async function GET() {
     vercel_env: vercelEnv,
     supabase_api_hostname: hostnameFromNextPublicSupabaseUrl(),
     neura_auth_bundle: "api-auth-context-v2-rls",
+    app_db_schema: process.env.APP_DB_SCHEMA?.trim() || null,
   });
 }
