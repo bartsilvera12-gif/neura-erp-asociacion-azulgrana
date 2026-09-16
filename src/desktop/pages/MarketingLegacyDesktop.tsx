@@ -613,8 +613,7 @@ export default function MarketingOpsPage() {
             <p className="font-semibold tracking-tight text-slate-800">No hay clientes en cartera marketing para este período</p>
             <p className="mx-auto mt-2 max-w-md text-sm leading-relaxed text-slate-500">
               Debe existir al menos una <strong>suscripción activa</strong> a un plan con{" "}
-              <strong>«Plan de marketing»</strong> y <strong>plantilla operativa</strong> con ítems, o un cliente con
-              tipo de servicio <strong>marketing</strong>.
+              <strong>«Plan de marketing»</strong> y <strong>plantilla operativa</strong> con ítems.
             </p>
             <p className="mt-4 text-xs text-slate-400">
               Si ya cumplís eso y no ves datos, ejecutá <strong>Sincronizar y regenerar mes</strong> (requiere admin) o

@@ -272,15 +272,6 @@ export default function ConciliacionClient() {
             <input type="date" value={hasta} onChange={(ev) => setHasta(ev.target.value)} aria-label="Hasta (fecha de transferencia)"
               className="rounded-lg border border-slate-200 bg-white px-2 py-1.5 text-sm text-slate-600 focus:outline-none focus:ring-2 focus:ring-[#4FAEB2]/40" />
           </label>
-          {tiposDisponibles.length > 0 && (
-            <select value={tipo} onChange={(ev) => setTipo(ev.target.value)} aria-label="Filtrar por tipo de servicio"
-              className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-sm text-slate-600 focus:outline-none focus:ring-2 focus:ring-[#4FAEB2]/40">
-              <option value="">Todos los tipos</option>
-              {tiposDisponibles.map((t) => (
-                <option key={t} value={t}>{capitalizar(t)}</option>
-              ))}
-            </select>
-          )}
           <select
             value={mes}
             onChange={(ev) => setMes(ev.target.value)}

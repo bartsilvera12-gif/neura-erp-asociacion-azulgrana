@@ -1352,10 +1352,10 @@ function DashFinanciero({
     [facturasPeriodo]
   );
 
-  /** Prioridad: tipo de servicio → condición de pago → origen */
+  /** Prioridad: condición de pago → origen. `tipo_servicio_cliente` ocultado por pedido del cliente Azulgrana. */
   const { dimCliente, segmentosClientes } = useMemo(() => {
     const list = clientes;
-    const hasServicio = list.some((c) => (c.tipo_servicio_cliente ?? "").trim() !== "");
+    const hasServicio = false;
     const hasCondicion = list.some((c) => (c.condicion_pago ?? "").trim() !== "");
     const dim: "tipo_servicio" | "condicion" | "origen" = hasServicio
       ? "tipo_servicio"

@@ -41,11 +41,6 @@ import MontoInput from "@/components/ui/MontoInput";
 import { getPlanes } from "@/lib/planes/storage";
 import { hoyYmdLocal, vencimientoPeriodo } from "@/lib/fechas/calendario";
 import type { Cliente, NotaCliente } from "@/lib/clientes/types";
-import {
-  etiquetaVisibleTipoServicio,
-  type ClienteTipoServicioRow,
-} from "@/lib/clientes/tipo-servicio-catalogo";
-import { filasTiposDesdeSistemaEstatico, fetchTiposFormCliente } from "@/lib/clientes/fetch-tipos-servicio-form";
 import type { Factura } from "@/lib/gestion-clientes/types";
 import {
   clasesBadgeEstadoFacturaUi,
@@ -99,7 +94,7 @@ const TABS: { id: TabId; label: string; showWhen?: (c: Cliente) => boolean }[] =
   { id: "informacion",   label: "Información"      },
   { id: "estado_cuenta", label: "Estado de cuenta" },
   { id: "suscripciones", label: "Suscripciones"    },
-  { id: "marketing",     label: "Marketing",        showWhen: (c) => c.tipo_servicio_cliente === "marketing" },
+  { id: "marketing",     label: "Marketing",        showWhen: (c) => c.tipo_servicio_cliente === "marketing" }, // tipo_servicio_cliente ocultado en UI por pedido del cliente Azulgrana; la pestaña sigue existiendo para datos legacy.
   { id: "proyectos",     label: "Proyectos"         },
   { id: "actividad",     label: "Actividad"         },
   { id: "notas",         label: "Notas"             },
@@ -159,7 +154,6 @@ const CAMPO_HISTORIAL: Record<string, string> = {
   nombre_contacto: "Contacto",
   ruc: "RUC",
   documento: "Documento",
-  tipo_servicio_cliente: "Tipo de servicio",
   tipo_cliente: "Tipo de cliente",
   estado: "Estado",
   condicion_pago: "Condición de pago",
@@ -350,7 +344,6 @@ export default function ClienteDetalleClient({
     vendedor_asignado:     "",
     vendedor_usuario_id:   "",
     project_manager_id:    "",
-    tipo_servicio_cliente: "" as string,
     numero_socio:          "" as string,
     tipo_socio:            "" as string,
     estado:                "activo" as Cliente["estado"],
@@ -457,33 +450,6 @@ export default function ClienteDetalleClient({
    *  para tenants erp_* no expuestos) y el botón parecía "no hacer nada". Ahora exponemos el motivo. */
   const [errorFacturaContado, setErrorFacturaContado] = useState<string | null>(null);
 
-  const [filasTiposServicio, setFilasTiposServicio] = useState<ClienteTipoServicioRow[]>(() => filasTiposDesdeSistemaEstatico());
-  const labelTipoServicioMap = useMemo(() => {
-    const m: Record<string, string> = {};
-    for (const t of filasTiposServicio) m[t.slug] = t.nombre;
-    return m;
-  }, [filasTiposServicio]);
-  const opcionesTipoServicio = useMemo(() => {
-    const t = (form.tipo_servicio_cliente ?? "").trim();
-    const list = filasTiposServicio;
-    if (!t) return list;
-    if (list.some((f) => f.slug === t)) return list;
-    return [
-      ...list,
-      {
-        id: `ghost-${t}`,
-        empresa_id: "",
-        slug: t,
-        nombre: etiquetaVisibleTipoServicio(t, labelTipoServicioMap),
-        activo: false,
-        orden: 0,
-        es_sistema: false,
-        created_at: "",
-        updated_at: "",
-      } satisfies ClienteTipoServicioRow,
-    ];
-  }, [form.tipo_servicio_cliente, filasTiposServicio, labelTipoServicioMap]);
-
   const sifenPorFactura = useFacturaSifenEstados(facturas.map((f) => f.id));
   const suscripcionActiva = useMemo(
     () => suscripciones.find((s) => s.estado === "activa") ?? null,
@@ -494,12 +460,6 @@ export default function ClienteDetalleClient({
     const d = new Date();
     return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
   }, []);
-
-  useEffect(() => {
-    if (!id) return;
-    const inc = (form.tipo_servicio_cliente || cliente?.tipo_servicio_cliente || "").trim() || null;
-    void fetchTiposFormCliente(inc).then(setFilasTiposServicio);
-  }, [id, form.tipo_servicio_cliente, cliente?.tipo_servicio_cliente]);
 
   const cargar = useCallback(async () => {
     setCargandoCliente(true);
@@ -546,7 +506,6 @@ export default function ClienteDetalleClient({
         vendedor_asignado:    c.vendedor_asignado   ?? "",
         vendedor_usuario_id:  c.vendedor_usuario_id ?? "",
         project_manager_id:   c.project_manager_id  ?? "",
-        tipo_servicio_cliente: c.tipo_servicio_cliente ?? "",
         numero_socio:         c.numero_socio != null ? String(c.numero_socio) : "",
         tipo_socio:           c.tipo_socio ?? "",
         estado:               c.estado,
@@ -785,7 +744,6 @@ export default function ClienteDetalleClient({
       }
     }
 
-    const tipoTs = (form.tipo_servicio_cliente || "").trim().toLowerCase();
     const sifenManualPayload = form.sifen_receptor_manual
       ? ({
           sifen_receptor_manual: true,
@@ -834,7 +792,6 @@ export default function ClienteDetalleClient({
         vendedor_asignado:   form.vendedor_asignado.trim().toUpperCase() || undefined,
         vendedor_usuario_id: form.vendedor_usuario_id.trim() || null,
         project_manager_id:  form.project_manager_id.trim() || null,
-        tipo_servicio_cliente: tipoTs || null,
         numero_socio:        form.numero_socio.trim() === "" ? null : Math.max(1, parseInt(form.numero_socio, 10) || 0) || null,
         tipo_socio:          form.tipo_socio.trim() || null,
         estado:              form.estado,
@@ -842,11 +799,6 @@ export default function ClienteDetalleClient({
       });
     } catch (err) {
       const m = err instanceof Error ? err.message : String(err);
-      if (/inexistente|inexistente en el cat|catálogo/i.test(m) || /check constraint/i.test(m) || m.includes("23514")) {
-        return setFormError(
-          "Ese «Tipo de servicio» no está en el catálogo CRM de tu empresa (o la base lo rechazó). Configuración → CRM → tipos/segmento: creá el tipo con el mismo identificador (slug), o elegí un tipo de la lista actualizada, y guardá de nuevo."
-        );
-      }
       return setFormError(m || "No se pudo guardar el cliente.");
     }
 
@@ -1308,17 +1260,10 @@ export default function ClienteDetalleClient({
         </div>
 
         {/* Estadísticas rápidas */}
-        <div className="grid grid-cols-2 divide-x divide-slate-100 border-t border-slate-100 bg-slate-50/40 sm:grid-cols-4 xl:grid-cols-8">
+        <div className="grid grid-cols-2 divide-x divide-slate-100 border-t border-slate-100 bg-slate-50/40 sm:grid-cols-4 xl:grid-cols-7">
           {(
             [
               { label: "Origen", value: cliente.origen },
-              {
-                label: "Tipo servicio",
-                value: etiquetaVisibleTipoServicio(
-                  cliente.tipo_servicio_cliente ?? null,
-                  labelTipoServicioMap
-                ),
-              },
               { label: "Condición", value: cliente.condicion_pago ?? "—" },
               {
                 label: "Plan activo",
@@ -1726,24 +1671,6 @@ export default function ClienteDetalleClient({
                       </button>
                     ))}
                   </div>
-                </div>
-
-                <div>
-                  <label className={labelClass}>Tipo de servicio</label>
-                  <select
-                    name="tipo_servicio_cliente"
-                    value={form.tipo_servicio_cliente}
-                    onChange={handleChange}
-                    className={inputClass}
-                  >
-                    <option value="">— Ninguno —</option>
-                    {opcionesTipoServicio.map((f) => (
-                      <option key={f.slug} value={f.slug}>
-                        {f.nombre}
-                        {!f.activo && (form.tipo_servicio_cliente || "").trim() === f.slug ? " (inactivo)" : ""}
-                      </option>
-                    ))}
-                  </select>
                 </div>
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">

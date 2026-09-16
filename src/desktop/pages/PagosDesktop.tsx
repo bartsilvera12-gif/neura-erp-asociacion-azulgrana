@@ -5,8 +5,6 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { enRangoCalendario, rangoDesdeHastaInputs, toCalendarDateStr } from "@/lib/fechas/calendario";
 import { getFacturas } from "@/lib/gestion-clientes/storage";
 import { getClientes } from "@/lib/clientes/storage";
-import { etiquetaVisibleTipoServicio } from "@/lib/clientes/tipo-servicio-catalogo";
-import { useMapNombreTipoServicioCatalogo } from "@/lib/clientes/use-map-nombre-tipo-servicio";
 import { fetchWithSupabaseSession } from "@/lib/api/fetch-with-supabase-session";
 import { RegistrarPagoModal } from "@/components/pagos/RegistrarPagoModal";
 import type { Cliente } from "@/lib/clientes/types";
@@ -151,8 +149,6 @@ export default function PagosPage() {
     getClientes().then(setClientes);
   }, []);
 
-  const mapNombreTipoServicio = useMapNombreTipoServicioCatalogo(clientes);
-
   async function fetchCobrados() {
     setCargandoCobrados(true);
     try {
@@ -271,21 +267,6 @@ export default function PagosPage() {
     return base.filter(porNombre);
   }, [cobradosPorFecha, filtroTipoCliente, filtroNombre]);
 
-  const opcionesTipoFiltro = useMemo(() => {
-    const s = new Set<string>();
-    for (const c of clientes) {
-      const t = (c.tipo_servicio_cliente ?? "").trim().toLowerCase();
-      if (t) s.add(t);
-    }
-    for (const k of Object.keys(mapNombreTipoServicio)) s.add(k);
-    return [...s]
-      .sort()
-      .map((slug) => ({
-        value: slug,
-        label: etiquetaVisibleTipoServicio(slug, mapNombreTipoServicio),
-      }));
-  }, [clientes, mapNombreTipoServicio]);
-
   const totalesPendientesVista = useMemo(
     () =>
       pendientesVista.reduce(
@@ -318,17 +299,6 @@ export default function PagosPage() {
       ) as Record<string, string>,
     [clientes]
   );
-  const labelTipoClienteFila = useCallback(
-    (clienteId: string) => {
-      const c = clientes.find((x) => String(x.id) === String(clienteId));
-      if (!c) return "—";
-      const t = (c.tipo_servicio_cliente ?? "").trim();
-      if (!t) return "Sin clasificar";
-      return etiquetaVisibleTipoServicio(t, mapNombreTipoServicio);
-    },
-    [clientes, mapNombreTipoServicio]
-  );
-
   const METODO_LABELS: Record<string, string> = {
     efectivo: "Efectivo",
     transferencia: "Transferencia",
@@ -449,23 +419,6 @@ export default function PagosPage() {
               className={INPUT_CLS}
             />
           </div>
-          <div className="min-w-[14rem] flex-1">
-            <label className={LABEL_CLS}>Tipo de servicio</label>
-            <select
-              value={filtroTipoCliente}
-              onChange={(e) => setFiltroTipoCliente(e.target.value)}
-              className={SELECT_CLS}
-              style={CHEVRON_STYLE}
-            >
-              <option value="">Todos los tipos</option>
-              <option value="__sin__">Sin clasificar</option>
-              {opcionesTipoFiltro.map((o) => (
-                <option key={o.value} value={o.value}>
-                  {o.label}
-                </option>
-              ))}
-            </select>
-          </div>
           {hasFilters ? (
             <button
               type="button"
@@ -539,7 +492,7 @@ export default function PagosPage() {
               <table className="w-full min-w-[960px] table-auto border-separate border-spacing-0 text-sm">
                 <thead className="bg-slate-50/80">
                   <tr>
-                    {["Número", "Cliente", "Tipo de cliente", "Vendedor", "Fecha", "Vencimiento", "Total", "Saldo", "Estado", "Acción"].map(
+                    {["Número", "Cliente", "Vendedor", "Fecha", "Vencimiento", "Total", "Saldo", "Estado", "Acción"].map(
                       (h) => {
                         // Padding reducido entre "Estado" y "Acción" (alineado con las celdas).
                         const pad =
@@ -580,14 +533,6 @@ export default function PagosPage() {
                           {clienteMapNombre[String(f.cliente_id)] ??
                             `Cliente #${String(f.cliente_id).slice(0, 8)}`}
                         </Link>
-                      </td>
-                      <td className="px-3 py-3 text-sm text-slate-600 sm:px-4">
-                        <span
-                          className="inline-block max-w-[18rem] truncate 2xl:max-w-none"
-                          title={labelTipoClienteFila(String(f.cliente_id))}
-                        >
-                          {labelTipoClienteFila(String(f.cliente_id))}
-                        </span>
                       </td>
                       <td className="px-3 py-3 text-sm text-slate-600 sm:px-4">
                         <span className="inline-block max-w-[12rem] truncate">
@@ -734,7 +679,7 @@ export default function PagosPage() {
               <table className="w-full min-w-[1040px] table-auto border-separate border-spacing-0 text-sm">
                 <thead className="bg-slate-50/80">
                   <tr>
-                    {["Factura", "Cliente", "Tipo de servicio", "Vendedor", "Monto pagado", "Fecha", "Método", "Usuario", "Fecha y hora"].map(
+                    {["Factura", "Cliente", "Vendedor", "Monto pagado", "Fecha", "Método", "Usuario", "Fecha y hora"].map(
                       (h) => (
                         <th
                           key={h}
@@ -760,14 +705,6 @@ export default function PagosPage() {
                           title={p.cliente_nombre}
                         >
                           {p.cliente_nombre}
-                        </span>
-                      </td>
-                      <td className="px-3 py-3 text-sm text-slate-600 sm:px-4">
-                        <span
-                          className="inline-block max-w-[18rem] truncate 2xl:max-w-none"
-                          title={p.servicio_tipo_nombre}
-                        >
-                          {p.servicio_tipo_nombre}
                         </span>
                       </td>
                       <td className="px-3 py-3 text-sm text-slate-600 sm:px-4">

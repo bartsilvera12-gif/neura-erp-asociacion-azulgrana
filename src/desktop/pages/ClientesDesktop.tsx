@@ -4,8 +4,6 @@ import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { useSearchParams } from "next/navigation";
 import { getClientes, clienteNombre } from "@/lib/clientes/storage";
 import type { Cliente } from "@/lib/clientes/types";
-import { etiquetaVisibleTipoServicio, type ClienteTipoServicioRow } from "@/lib/clientes/tipo-servicio-catalogo";
-import { filasTiposDesdeSistemaEstatico, fetchTiposFormCliente } from "@/lib/clientes/fetch-tipos-servicio-form";
 import { FancySelect } from "@/app/dashboard/proyectos/components/FancySelect";
 import EdgeScrollArea from "@/components/ui/EdgeScrollArea";
 import ClienteNuevoModal from "@/app/clientes/components/ClienteNuevoModal";
@@ -88,19 +86,6 @@ function avatarInitial(label: string): string {
   return (m?.[0] ?? "?").toUpperCase();
 }
 
-// ── Tipo servicio: chip turquesa cuando hay valor ────────────────────────────
-
-function TipoServicioCell({ slug, mapNombreTipo }: { slug: string | null; mapNombreTipo: Record<string, string> }) {
-  const label = etiquetaVisibleTipoServicio(slug, mapNombreTipo);
-  if (!label || label === "—") return <span className="text-xs text-slate-400">—</span>;
-  return (
-    <span className="inline-flex items-center gap-1.5 rounded-full border border-slate-200 bg-slate-50 px-2 py-0.5 text-[11px] font-medium text-slate-700">
-      <span aria-hidden="true" className="h-1 w-1 rounded-full bg-[#4FAEB2]" />
-      {label}
-    </span>
-  );
-}
-
 // ── Columnas configurables ────────────────────────────────────────────────────
 
 const CLIENTES_COLUMNAS_STORAGE_KEY = "neura.erp.clientes.columnas.v1";
@@ -114,7 +99,6 @@ type ClienteColumnKey =
   | "telefono"
   | "plan_activo"
   | "origen"
-  | "tipo_servicio"
   | "estado"
   | "desde"
   | "creado_por"
@@ -198,7 +182,7 @@ function BadgeTipoSocio({ tipo }: { tipo: string | null }) {
   );
 }
 
-function buildClienteColumns(mapNombreTipo: Record<string, string>): ClienteColumnDef[] {
+function buildClienteColumns(): ClienteColumnDef[] {
   const th =
     "text-left text-[10px] font-semibold uppercase tracking-[0.08em] text-slate-500 px-3 py-2 whitespace-nowrap";
   const td = "px-3 py-2.5";
@@ -319,14 +303,6 @@ function buildClienteColumns(mapNombreTipo: Record<string, string>): ClienteColu
       render: (c) => <BadgeOrigen origen={c.origen} />,
     },
     {
-      key: "tipo_servicio",
-      label: "Tipo servicio",
-      visibleDefault: true,
-      headerClassName: th,
-      className: `${td} whitespace-nowrap`,
-      render: (c) => <TipoServicioCell slug={c.tipo_servicio_cliente ?? null} mapNombreTipo={mapNombreTipo} />,
-    },
-    {
       key: "estado",
       label: "Estado",
       visibleDefault: true,
@@ -401,19 +377,12 @@ export default function ClientesPage() {
   const [filtroEstado, setFiltroEstado] = useState<"" | "activo" | "inactivo">("");
   const [filtroOrigen, setFiltroOrigen] = useState<"" | "CRM" | "VENTA" | "MANUAL">("");
   const [filtroTipo,   setFiltroTipo]   = useState<"" | "empresa" | "persona">("");
-  const [filtroTipoServicio, setFiltroTipoServicio] = useState<"" | string>("");
   const [nuevoOpen, setNuevoOpen] = useState(false);
   const [detalleId, setDetalleId] = useState<string | null>(null);
   const [columnasOpen, setColumnasOpen] = useState(false);
   const [columnasInicializadas, setColumnasInicializadas] = useState(false);
   const [visibleColumnKeys, setVisibleColumnKeys] = useState<ClienteColumnKey[]>(DEFAULT_VISIBLE_COLUMN_KEYS);
-  const [filasTipoCatalogo, setFilasTipoCatalogo] = useState<ClienteTipoServicioRow[]>(() => filasTiposDesdeSistemaEstatico());
-  const mapNombreTipo = useMemo(() => {
-    const m: Record<string, string> = {};
-    for (const t of filasTipoCatalogo) m[t.slug] = t.nombre;
-    return m;
-  }, [filasTipoCatalogo]);
-  const clienteColumns = useMemo(() => buildClienteColumns(mapNombreTipo), [mapNombreTipo]);
+  const clienteColumns = useMemo(() => buildClienteColumns(), []);
   const visibleColumnSet = useMemo(() => new Set(visibleColumnKeys), [visibleColumnKeys]);
   const visibleColumns = useMemo(
     () => clienteColumns.filter((col) => visibleColumnSet.has(col.key)),
@@ -436,10 +405,6 @@ export default function ClientesPage() {
   }, []);
 
   useEffect(() => {
-    void fetchTiposFormCliente().then(setFilasTipoCatalogo);
-  }, []);
-
-  useEffect(() => {
     try {
       const raw = window.localStorage.getItem(CLIENTES_COLUMNAS_STORAGE_KEY);
       const parsed = raw ? JSON.parse(raw) : null;
@@ -459,16 +424,6 @@ export default function ClientesPage() {
       /* localStorage puede fallar en modo privado; los defaults siguen funcionando. */
     }
   }, [visibleColumnKeys, columnasInicializadas]);
-
-  const slugsExtraFiltro = useMemo(() => {
-    const known = new Set(filasTipoCatalogo.map((f) => f.slug));
-    const u = new Set<string>();
-    for (const c of clientes) {
-      const t = (c.tipo_servicio_cliente ?? "").trim();
-      if (t && !known.has(t)) u.add(t);
-    }
-    return Array.from(u).sort();
-  }, [clientes, filasTipoCatalogo]);
 
   useEffect(() => {
     if (searchParams?.get("baja_ok") === "1") {
@@ -513,11 +468,10 @@ export default function ClientesPage() {
     if (filtroEstado       && c.estado              !== filtroEstado) return false;
     if (filtroOrigen       && c.origen              !== filtroOrigen) return false;
     if (filtroTipo         && c.tipo_cliente        !== filtroTipo) return false;
-    if (filtroTipoServicio && c.tipo_servicio_cliente !== filtroTipoServicio) return false;
     return true;
   });
 
-  const hayFiltros = busqueda || filtroEstado || filtroOrigen || filtroTipo || filtroTipoServicio;
+  const hayFiltros = busqueda || filtroEstado || filtroOrigen || filtroTipo;
 
   function toggleColumn(key: ClienteColumnKey) {
     const col = clienteColumns.find((c) => c.key === key);
@@ -649,22 +603,6 @@ export default function ClientesPage() {
             { value: "MANUAL", label: "Manual" },
           ]}
         />
-        <FancySelect
-          size="sm"
-          className="min-w-[160px] shrink-0"
-          ariaLabel="Filtrar por tipo de servicio"
-          placeholder="Tipo servicio"
-          value={filtroTipoServicio}
-          onChange={(v) => setFiltroTipoServicio(v)}
-          options={[
-            { value: "", label: "Todos los servicios" },
-            ...filasTipoCatalogo.map((t) => ({ value: t.slug, label: t.nombre })),
-            ...slugsExtraFiltro.map((slug) => ({
-              value: slug,
-              label: etiquetaVisibleTipoServicio(slug, mapNombreTipo),
-            })),
-          ]}
-        />
         {hayFiltros && (
           <button
             onClick={() => {
@@ -672,7 +610,6 @@ export default function ClientesPage() {
               setFiltroEstado("");
               setFiltroOrigen("");
               setFiltroTipo("");
-              setFiltroTipoServicio("");
             }}
             className="shrink-0 rounded-lg border border-transparent px-2.5 py-1.5 text-[11px] font-medium text-slate-500 transition-colors hover:bg-slate-100 hover:text-slate-700"
           >
