@@ -7,6 +7,7 @@ import { getClientesSupabaseFromAuthWithRol } from "@/lib/clientes/clientes-serv
 import { createServiceRoleClient } from "@/lib/supabase/service-admin";
 import { fetchPerfilTributarioDetalle } from "@/lib/clientes/tributario-server";
 import { construirPatchActualizacionCliente, type ActualizarClienteInput } from "@/lib/clientes/storage";
+import { limpiarDocumento, validarPayloadCliente } from "@/lib/clientes/validators";
 import { ensureSemillasCatalogoTipos, tipoServicioSlugValido } from "@/lib/clientes/tipo-servicio-catalogo";
 import { registrarHistorialCliente, diffCamposCliente, CAMPOS_AUDITABLES } from "@/lib/clientes/historial";
 
@@ -116,6 +117,29 @@ export async function PATCH(
 
     const raw = (await request.json().catch(() => ({}))) as Record<string, unknown>;
     const datos = raw as ActualizarClienteInput;
+    // Normaliza documento antes de validar/persistir (permite que el usuario
+    // tipee "1.234.567" y guarde "1234567").
+    if (datos.documento !== undefined) {
+      datos.documento = limpiarDocumento(datos.documento) as string | undefined;
+    }
+    const errValidacion = validarPayloadCliente({
+      tipo_cliente: datos.tipo_cliente,
+      empresa: datos.empresa,
+      nombre_contacto: datos.nombre_contacto,
+      razon_social: datos.razon_social,
+      ruc: datos.ruc,
+      ruc_factura: datos.ruc_factura,
+      documento: datos.documento,
+      telefono: datos.telefono,
+      telefono_secundario: datos.telefono_secundario,
+      email: datos.email,
+      email_secundario: datos.email_secundario,
+      sitio_web: datos.sitio_web,
+      numero_socio: datos.numero_socio ?? null,
+    });
+    if (errValidacion) {
+      return NextResponse.json(errorResponse(errValidacion), { status: 400 });
+    }
     const patch = construirPatchActualizacionCliente(datos);
 
     const { data: existing, error: errExist } = await supabase

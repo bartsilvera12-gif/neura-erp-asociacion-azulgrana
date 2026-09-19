@@ -29,6 +29,16 @@ import {
 } from "@/lib/api/client";
 import { getFacturas, getSuscripciones } from "@/lib/facturacion/storage";
 import { formatTelefonoPy } from "@/lib/clientes/format-telefono";
+import {
+  limpiarDocumento,
+  validarDocumento,
+  validarEmail,
+  validarNombre,
+  validarNumeroSocio,
+  validarRuc,
+  validarSitioWeb,
+  validarTelefono,
+} from "@/lib/clientes/validators";
 import { AnularFacturaButton } from "@/components/facturas/AnularFacturaButton";
 import { CondonarSaldoButton } from "@/components/facturas/CondonarSaldoButton";
 import { getMarketingTasks, createMarketingTask, updateTaskStatus } from "@/lib/marketing/storage";
@@ -65,6 +75,11 @@ import { ClienteDatosSifenReceptorForm } from "@/components/clientes/ClienteDato
 const inputClass =
   "w-full border border-slate-200 rounded-lg px-3 py-2 outline-none focus:ring-2 focus:ring-[#4FAEB2] focus:outline-none bg-white text-sm";
 const labelClass = "block text-xs font-medium text-slate-500 mb-1";
+
+function FieldError({ msg }: { msg: string | null | undefined }) {
+  if (!msg) return null;
+  return <p className="mt-1 text-xs text-rose-600">{msg}</p>;
+}
 
 function SectionTitle({ children }: { children: React.ReactNode }) {
   return (
@@ -359,6 +374,7 @@ export default function ClienteDetalleClient({
   });
 
   const [formError, setFormError] = useState<string | null>(null);
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string | null>>({});
 
   // Campos de suscripción (solo cuando condicion_pago = MENSUAL en edición)
   const [formSuscEdit, setFormSuscEdit] = useState({
@@ -662,8 +678,31 @@ export default function ClienteDetalleClient({
     let normalized = value;
     if (lower.includes(name) || type === "email") normalized = value.toLowerCase();
     else if (upper.includes(name)) normalized = value.toUpperCase();
-    // El nombre de una persona no lleva números (evita que se cuele un teléfono en el nombre).
-    if (name === "nombre_contacto") normalized = normalized.replace(/[0-9]/g, "");
+    // Nombres/razón social: bloquear números y símbolos raros.
+    if (name === "nombre_contacto" || name === "empresa" || name === "razon_social") {
+      normalized = normalized.replace(/[^A-Za-zÀ-ÿñÑ'\-\s.]/g, "");
+    }
+    if (name === "ruc" || name === "ruc_factura") {
+      normalized = normalized.replace(/[^0-9-]/g, "");
+      const partes = normalized.split("-");
+      if (partes.length > 2) normalized = partes[0] + "-" + partes.slice(1).join("");
+    }
+    if (name === "documento") normalized = normalized.replace(/[^0-9.,\s]/g, "");
+    if (name === "telefono_secundario") normalized = normalized.replace(/[^0-9+\-\s()]/g, "");
+
+    // Validación inline por campo.
+    let err: string | null = null;
+    if (name === "nombre_contacto") err = validarNombre(normalized, "El nombre de contacto");
+    else if (name === "empresa") err = validarNombre(normalized, "El nombre de empresa");
+    else if (name === "razon_social") err = validarNombre(normalized, "La razón social");
+    else if (name === "ruc" || name === "ruc_factura") err = validarRuc(normalized, form.tipo_cliente);
+    else if (name === "documento") err = validarDocumento(normalized);
+    else if (name === "email" || name === "email_secundario") err = validarEmail(normalized);
+    else if (name === "telefono_secundario") err = validarTelefono(normalized);
+    else if (name === "sitio_web") err = validarSitioWeb(normalized);
+    if (["nombre_contacto","empresa","razon_social","ruc","ruc_factura","documento","email","email_secundario","telefono_secundario","sitio_web"].includes(name)) {
+      setFieldErrors((prev) => ({ ...prev, [name]: err }));
+    }
     setForm((prev) => ({ ...prev, [name]: normalized }));
   }
 
@@ -672,6 +711,29 @@ export default function ClienteDetalleClient({
     setFormError(null);
     if (!form.nombre_contacto.trim())                             return setFormError("El contacto es obligatorio.");
     if (form.tipo_cliente === "empresa" && !form.empresa.trim())  return setFormError("El nombre de empresa es obligatorio.");
+
+    // Simetría con ClienteNuevoForm: revalidar todo antes del PATCH.
+    const checks: Record<string, string | null> = {
+      empresa: validarNombre(form.empresa, "El nombre de empresa"),
+      nombre_contacto: validarNombre(form.nombre_contacto, "El nombre de contacto"),
+      razon_social: validarNombre(form.razon_social, "La razón social"),
+      ruc: validarRuc(form.ruc, form.tipo_cliente),
+      ruc_factura: validarRuc(form.ruc_factura, form.tipo_cliente),
+      documento: validarDocumento(form.documento),
+      telefono_secundario: validarTelefono(form.telefono_secundario),
+      email: validarEmail(form.email),
+      email_secundario: validarEmail(form.email_secundario),
+      sitio_web: validarSitioWeb(form.sitio_web),
+      numero_socio: validarNumeroSocio(form.numero_socio),
+    };
+    if (form.tipo_cliente === "empresa" && form.ruc.trim() && !/^\d{8}(-\d)?$/.test(form.ruc.trim())) {
+      checks.ruc = "El RUC de empresa debe tener 8 dígitos (ej. 80012345-6).";
+    }
+    const primerError = Object.entries(checks).find(([, v]) => v);
+    if (primerError) {
+      setFieldErrors(checks);
+      return setFormError(primerError[1] as string);
+    }
 
     // Solo validar creación de suscripción cuando: MENSUAL + activo + NO tiene suscripciones
     if (form.condicion_pago === "MENSUAL" && form.estado === "activo" && suscripciones.length === 0) {
@@ -775,7 +837,7 @@ export default function ClienteDetalleClient({
         ruc_factura:         form.ruc_factura.trim() || undefined,
         nombre_contacto:     form.nombre_contacto.trim().toUpperCase(),
         ruc:                 form.ruc.trim()                 || undefined,
-        documento:           form.documento.trim()           || undefined,
+        documento:           limpiarDocumento(form.documento) ?? undefined,
         telefono:            form.telefono.trim()            || undefined,
         telefono_secundario: form.telefono_secundario.trim() || undefined,
         email:               form.email.trim()               || undefined,
@@ -1688,6 +1750,7 @@ export default function ClienteDetalleClient({
                       placeholder="Ej. 123"
                       className={inputClass}
                     />
+                    <FieldError msg={fieldErrors.numero_socio} />
                   </div>
                   <div>
                     <label className={labelClass}>Tipo de socio</label>
@@ -1711,10 +1774,12 @@ export default function ClienteDetalleClient({
                     <div>
                       <label className={labelClass}>Nombre de empresa</label>
                       <input type="text" name="empresa" value={form.empresa} onChange={handleChange} className={`${inputClass} uppercase`} />
+                      <FieldError msg={fieldErrors.empresa} />
                     </div>
                     <div>
                       <label className={labelClass}>RUC</label>
-                      <input type="text" name="ruc" value={form.ruc} onChange={handleChange} className={inputClass} placeholder="00000000-0" />
+                      <input type="text" name="ruc" value={form.ruc} onChange={handleChange} inputMode="numeric" className={inputClass} placeholder="00000000-0" />
+                      <FieldError msg={fieldErrors.ruc} />
                     </div>
                   </div>
                 ) : (
@@ -1722,10 +1787,12 @@ export default function ClienteDetalleClient({
                     <div>
                       <label className={labelClass}>Nombre completo</label>
                       <input type="text" name="nombre_contacto" value={form.nombre_contacto} onChange={handleChange} className={`${inputClass} uppercase`} required />
+                      <FieldError msg={fieldErrors.nombre_contacto} />
                     </div>
                     <div>
                       <label className={labelClass}>CI / Documento</label>
-                      <input type="text" name="documento" value={form.documento} onChange={handleChange} className={inputClass} />
+                      <input type="text" name="documento" value={form.documento} onChange={handleChange} inputMode="numeric" className={inputClass} />
+                      <FieldError msg={fieldErrors.documento} />
                     </div>
                   </div>
                 )}
@@ -1736,6 +1803,7 @@ export default function ClienteDetalleClient({
                     <div>
                       <label className={labelClass}>Persona de contacto</label>
                       <input type="text" name="nombre_contacto" value={form.nombre_contacto} onChange={handleChange} className={`${inputClass} uppercase`} required />
+                      <FieldError msg={fieldErrors.nombre_contacto} />
                     </div>
                   ) : null}
                   <div>
@@ -1752,6 +1820,22 @@ export default function ClienteDetalleClient({
                   </div>
                 </div>
 
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div>
+                    <label className={labelClass}>Teléfono secundario</label>
+                    <input
+                      type="tel"
+                      name="telefono_secundario"
+                      inputMode="tel"
+                      value={form.telefono_secundario}
+                      onChange={handleChange}
+                      placeholder="Opcional"
+                      className={inputClass}
+                    />
+                    <FieldError msg={fieldErrors.telefono_secundario} />
+                  </div>
+                </div>
+
                 <div className="rounded-xl border border-slate-200 bg-slate-50/60 p-3">
                   <p className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-slate-500">Datos para factura</p>
                   <p className="mb-3 text-xs text-slate-500">
@@ -1762,10 +1846,12 @@ export default function ClienteDetalleClient({
                     <div>
                       <label className={labelClass}>{form.tipo_cliente === "empresa" ? "Razón social" : "Nombre para factura"}</label>
                       <input type="text" name="razon_social" value={form.razon_social} onChange={handleChange} className={`${inputClass} uppercase`} />
+                      <FieldError msg={fieldErrors.razon_social} />
                     </div>
                     <div>
                       <label className={labelClass}>RUC</label>
-                      <input type="text" name="ruc_factura" value={form.ruc_factura} onChange={handleChange} className={inputClass} placeholder="00000000-0" />
+                      <input type="text" name="ruc_factura" value={form.ruc_factura} onChange={handleChange} inputMode="numeric" className={inputClass} placeholder="00000000-0" />
+                      <FieldError msg={fieldErrors.ruc_factura} />
                     </div>
                   </div>
                 </div>
@@ -1775,9 +1861,17 @@ export default function ClienteDetalleClient({
               <section className="space-y-4">
                 <SectionTitle>Contacto</SectionTitle>
 
-                <div>
-                  <label className={labelClass}>Email</label>
-                  <input type="email" name="email" value={form.email} onChange={handleChange} className={inputClass} />
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div>
+                    <label className={labelClass}>Email</label>
+                    <input type="email" name="email" value={form.email} onChange={handleChange} className={inputClass} />
+                    <FieldError msg={fieldErrors.email} />
+                  </div>
+                  <div>
+                    <label className={labelClass}>Email secundario</label>
+                    <input type="email" name="email_secundario" value={form.email_secundario} onChange={handleChange} placeholder="Opcional" className={inputClass} />
+                    <FieldError msg={fieldErrors.email_secundario} />
+                  </div>
                 </div>
 
                 <div>
@@ -1871,6 +1965,7 @@ export default function ClienteDetalleClient({
                   <div>
                     <label className={labelClass}>Sitio web</label>
                     <input type="text" name="sitio_web" value={form.sitio_web} onChange={handleChange} placeholder="https://" className={inputClass} />
+                    <FieldError msg={fieldErrors.sitio_web} />
                   </div>
                   <div>
                     <label className={labelClass}>Instagram</label>

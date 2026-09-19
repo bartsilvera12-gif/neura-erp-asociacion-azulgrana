@@ -92,10 +92,16 @@ export async function apiCreateCliente(data: {
   ruc?: string;
   documento?: string;
   telefono?: string;
+  telefono_secundario?: string;
   email?: string;
+  email_secundario?: string;
   direccion?: string;
   ciudad?: string;
   pais?: string;
+  sitio_web?: string;
+  instagram?: string;
+  linkedin?: string;
+  valor_cliente?: number | null;
   condicion_pago?: string;
   moneda_preferida?: string;
   estado?: string;

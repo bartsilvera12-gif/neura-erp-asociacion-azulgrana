@@ -25,6 +25,16 @@ import { getPlanes } from "@/lib/planes/storage";
 import type { Cliente, TipoCliente, OrigenCliente } from "@/lib/clientes/types";
 import { ClienteDatosSifenReceptorForm } from "@/components/clientes/ClienteDatosSifenReceptorForm";
 import { formatTelefonoPy } from "@/lib/clientes/format-telefono";
+import {
+  limpiarDocumento,
+  validarDocumento,
+  validarEmail,
+  validarNombre,
+  validarNumeroSocio,
+  validarRuc,
+  validarSitioWeb,
+  validarTelefono,
+} from "@/lib/clientes/validators";
 import type { Plan } from "@/lib/planes/types";
 
 export type ClienteNuevoFormProps = {
@@ -41,6 +51,12 @@ export type ClienteNuevoFormProps = {
 const inputClass =
   "w-full rounded-xl border border-slate-200 bg-white px-3.5 py-2.5 text-sm text-slate-900 placeholder:text-slate-400 shadow-sm transition-colors hover:border-[#4FAEB2]/60 focus:border-[#4FAEB2] focus:outline-none focus:ring-2 focus:ring-[#4FAEB2]/20";
 const labelClass = "block text-xs font-medium uppercase tracking-wide text-slate-500 mb-1.5";
+
+/** Mensaje de error inline (rojo) debajo de un input. */
+function FieldError({ msg }: { msg: string | null | undefined }) {
+  if (!msg) return null;
+  return <p className="mt-1 text-xs text-rose-600">{msg}</p>;
+}
 
 function SectionTitle({ children }: { children: React.ReactNode }) {
   return (
@@ -62,6 +78,8 @@ function ClienteNuevoFormInner({ variant = "page", onCreated, onCancel, fromPros
 
   const [crmBanner, setCrmBanner] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  /** Errores por campo (validación inline). */
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string | null>>({});
   const [duplicado, setDuplicado] = useState<
     { mensaje: string; hay_inactivo: boolean; matches: DuplicadoMatchClient[] } | null
   >(null);
@@ -211,6 +229,10 @@ function ClienteNuevoFormInner({ variant = "page", onCreated, onCancel, fromPros
   const upper = ["empresa", "razon_social", "nombre_contacto", "ciudad", "pais", "condicion_pago", "direccion", "sifen_codigo_pais"];
   const lower = ["email", "email_secundario"];
 
+  function setFieldError(name: string, msg: string | null) {
+    setFieldErrors((prev) => ({ ...prev, [name]: msg }));
+  }
+
   function handleChange(e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) {
     setError(null);
     const { name, value } = e.target;
@@ -218,8 +240,36 @@ function ClienteNuevoFormInner({ variant = "page", onCreated, onCancel, fromPros
     let normalized = value;
     if (lower.includes(name) || type === "email") normalized = value.toLowerCase();
     else if (upper.includes(name)) normalized = value.toUpperCase();
-    // El nombre de una persona no lleva números (evita que se cuele un teléfono en el nombre).
-    if (name === "nombre_contacto") normalized = normalized.replace(/[0-9]/g, "");
+    // Los campos de "nombre" bloquean números y símbolos raros mientras se tipea.
+    if (name === "nombre_contacto" || name === "empresa" || name === "razon_social") {
+      normalized = normalized.replace(/[^A-Za-zÀ-ÿñÑ'\-\s.]/g, "");
+    }
+    // RUC / RUC de factura: solo dígitos y un guión.
+    if (name === "ruc" || name === "ruc_factura") {
+      normalized = normalized.replace(/[^0-9-]/g, "");
+      // permitir solo un guión
+      const partes = normalized.split("-");
+      if (partes.length > 2) normalized = partes[0] + "-" + partes.slice(1).join("");
+    }
+    // Documento: dígitos + separadores visuales (se limpian al enviar).
+    if (name === "documento") {
+      normalized = normalized.replace(/[^0-9.,\s]/g, "");
+    }
+    // Teléfono secundario: dígitos, espacios, guiones y +.
+    if (name === "telefono_secundario") {
+      normalized = normalized.replace(/[^0-9+\-\s()]/g, "");
+    }
+    // Validación inline por campo (mensajes en rojo debajo del input).
+    if (name === "nombre_contacto") setFieldError(name, validarNombre(normalized, "El nombre de contacto"));
+    else if (name === "empresa") setFieldError(name, validarNombre(normalized, "El nombre de empresa"));
+    else if (name === "razon_social") setFieldError(name, validarNombre(normalized, "La razón social"));
+    else if (name === "ruc") setFieldError(name, validarRuc(normalized, form.tipo_cliente));
+    else if (name === "ruc_factura") setFieldError(name, validarRuc(normalized, form.tipo_cliente));
+    else if (name === "documento") setFieldError(name, validarDocumento(normalized));
+    else if (name === "email") setFieldError(name, validarEmail(normalized));
+    else if (name === "email_secundario") setFieldError(name, validarEmail(normalized));
+    else if (name === "telefono_secundario") setFieldError(name, validarTelefono(normalized));
+    else if (name === "sitio_web") setFieldError(name, validarSitioWeb(normalized));
     setForm((prev) => {
       const next = { ...prev, [name]: normalized };
       // Espejo: mientras el usuario no toque la razón social, sigue al nombre del cliente
@@ -254,6 +304,32 @@ function ClienteNuevoFormInner({ variant = "page", onCreated, onCancel, fromPros
     if (!form.nombre_contacto.trim()) return setError("El nombre de contacto es obligatorio.");
     if (form.tipo_cliente === "empresa" && !form.empresa.trim())
       return setError("El nombre de empresa es obligatorio.");
+
+    // Corre las validaciones una vez más antes del submit: si el usuario deja un
+    // campo con error, no dejamos que se envíe (ni intento de red ni "carga
+    // silenciosa" contra la API).
+    const checks: Record<string, string | null> = {
+      empresa: validarNombre(form.empresa, "El nombre de empresa"),
+      nombre_contacto: validarNombre(form.nombre_contacto, "El nombre de contacto"),
+      razon_social: validarNombre(form.razon_social, "La razón social"),
+      ruc: validarRuc(form.ruc, form.tipo_cliente),
+      ruc_factura: validarRuc(form.ruc_factura, form.tipo_cliente),
+      documento: validarDocumento(form.documento),
+      telefono_secundario: validarTelefono(form.telefono_secundario),
+      email: validarEmail(form.email),
+      email_secundario: validarEmail(form.email_secundario),
+      sitio_web: validarSitioWeb(form.sitio_web),
+      numero_socio: validarNumeroSocio(form.numero_socio),
+    };
+    // Empresa: RUC de 8 dígitos si se completó — la regla combinada.
+    if (form.tipo_cliente === "empresa" && form.ruc.trim() && !/^\d{8}(-\d)?$/.test(form.ruc.trim())) {
+      checks.ruc = "El RUC de empresa debe tener 8 dígitos (ej. 80012345-6).";
+    }
+    const primerError = Object.entries(checks).find(([, v]) => v);
+    if (primerError) {
+      setFieldErrors(checks);
+      return setError(primerError[1] as string);
+    }
 
     if (form.condicion_pago === "MENSUAL" && form.estado === "activo") {
       const dur = parseInt(formSusc.duracion_meses, 10) || 0;
@@ -335,12 +411,18 @@ function ClienteNuevoFormInner({ variant = "page", onCreated, onCancel, fromPros
       ruc_factura: form.ruc_factura.trim() || undefined,
       nombre_contacto: form.nombre_contacto.trim().toUpperCase(),
       ruc: form.ruc.trim() || undefined,
-      documento: form.documento.trim() || undefined,
+      documento: limpiarDocumento(form.documento) ?? undefined,
       telefono: form.telefono.trim() || undefined,
+      telefono_secundario: form.telefono_secundario.trim() || undefined,
       email: form.email.trim() || undefined,
+      email_secundario: form.email_secundario.trim().toLowerCase() || undefined,
       direccion: form.direccion.trim() || undefined,
       ciudad: form.ciudad.trim().toUpperCase() || undefined,
       pais: form.pais.trim().toUpperCase() || undefined,
+      sitio_web: form.sitio_web.trim() || undefined,
+      instagram: form.instagram.trim() || undefined,
+      linkedin: form.linkedin.trim() || undefined,
+      valor_cliente: form.valor_cliente.trim() === "" ? null : Number(form.valor_cliente) || null,
       condicion_pago: form.condicion_pago.trim().toUpperCase() || undefined,
       moneda_preferida: form.moneda_preferida,
       estado: form.estado,
@@ -505,6 +587,7 @@ function ClienteNuevoFormInner({ variant = "page", onCreated, onCancel, fromPros
                     placeholder="CÓMO CONOCÉS A LA EMPRESA"
                     className={`${inputClass} uppercase`}
                   />
+                  <FieldError msg={fieldErrors.empresa} />
                 </div>
                 <div>
                   <label className={labelClass}>RUC</label>
@@ -514,8 +597,10 @@ function ClienteNuevoFormInner({ variant = "page", onCreated, onCancel, fromPros
                     value={form.ruc}
                     onChange={handleChange}
                     placeholder="00000000-0"
+                    inputMode="numeric"
                     className={inputClass}
                   />
+                  <FieldError msg={fieldErrors.ruc} />
                 </div>
               </div>
             ) : (
@@ -533,6 +618,7 @@ function ClienteNuevoFormInner({ variant = "page", onCreated, onCancel, fromPros
                     className={`${inputClass} uppercase`}
                     required
                   />
+                  <FieldError msg={fieldErrors.nombre_contacto} />
                 </div>
                 <div>
                   <label className={labelClass}>CI / Documento</label>
@@ -542,8 +628,10 @@ function ClienteNuevoFormInner({ variant = "page", onCreated, onCancel, fromPros
                     value={form.documento}
                     onChange={handleChange}
                     placeholder="CI sin puntos"
+                    inputMode="numeric"
                     className={inputClass}
                   />
+                  <FieldError msg={fieldErrors.documento} />
                 </div>
               </div>
             )}
@@ -561,6 +649,7 @@ function ClienteNuevoFormInner({ variant = "page", onCreated, onCancel, fromPros
                   placeholder="Ej. 123"
                   className={inputClass}
                 />
+                <FieldError msg={fieldErrors.numero_socio} />
               </div>
               <div>
                 <label className={labelClass}>Tipo de socio</label>
@@ -594,6 +683,7 @@ function ClienteNuevoFormInner({ variant = "page", onCreated, onCancel, fromPros
                     className={`${inputClass} uppercase`}
                     required
                   />
+                  <FieldError msg={fieldErrors.nombre_contacto} />
                 </div>
               ) : null}
               <div>
@@ -608,6 +698,20 @@ function ClienteNuevoFormInner({ variant = "page", onCreated, onCancel, fromPros
                   className={inputClass}
                 />
               </div>
+            </div>
+
+            <div>
+              <label className={labelClass}>Teléfono secundario</label>
+              <input
+                type="tel"
+                name="telefono_secundario"
+                inputMode="tel"
+                value={form.telefono_secundario}
+                onChange={handleChange}
+                placeholder="Opcional"
+                className={inputClass}
+              />
+              <FieldError msg={fieldErrors.telefono_secundario} />
             </div>
           </div>
         </section>
@@ -636,6 +740,7 @@ function ClienteNuevoFormInner({ variant = "page", onCreated, onCancel, fromPros
                 }
                 className={`${inputClass} uppercase`}
               />
+              <FieldError msg={fieldErrors.razon_social} />
             </div>
             <div>
               <label className={labelClass}>RUC</label>
@@ -645,8 +750,10 @@ function ClienteNuevoFormInner({ variant = "page", onCreated, onCancel, fromPros
                 value={form.ruc_factura}
                 onChange={handleChange}
                 placeholder="00000000-0"
+                inputMode="numeric"
                 className={inputClass}
               />
+              <FieldError msg={fieldErrors.ruc_factura} />
             </div>
           </div>
         </section>
@@ -655,16 +762,31 @@ function ClienteNuevoFormInner({ variant = "page", onCreated, onCancel, fromPros
         <section className={sectionWrap}>
           <SectionTitle>Contacto</SectionTitle>
           <div className="space-y-4">
-            <div>
-              <label className={labelClass}>Email</label>
-              <input
-                type="email"
-                name="email"
-                value={form.email}
-                onChange={handleChange}
-                placeholder="contacto@empresa.com"
-                className={inputClass}
-              />
+            <div className="grid gap-4 sm:grid-cols-2">
+              <div>
+                <label className={labelClass}>Email</label>
+                <input
+                  type="email"
+                  name="email"
+                  value={form.email}
+                  onChange={handleChange}
+                  placeholder="contacto@empresa.com"
+                  className={inputClass}
+                />
+                <FieldError msg={fieldErrors.email} />
+              </div>
+              <div>
+                <label className={labelClass}>Email secundario</label>
+                <input
+                  type="email"
+                  name="email_secundario"
+                  value={form.email_secundario}
+                  onChange={handleChange}
+                  placeholder="Opcional"
+                  className={inputClass}
+                />
+                <FieldError msg={fieldErrors.email_secundario} />
+              </div>
             </div>
 
             <div>
@@ -772,6 +894,47 @@ function ClienteNuevoFormInner({ variant = "page", onCreated, onCancel, fromPros
           </div>
         </section>
 
+        {/* Presencia digital (opcionales) */}
+        <section className={sectionWrap}>
+          <SectionTitle>Presencia digital</SectionTitle>
+          <div className="grid gap-4 sm:grid-cols-3">
+            <div>
+              <label className={labelClass}>Sitio web</label>
+              <input
+                type="text"
+                name="sitio_web"
+                value={form.sitio_web}
+                onChange={handleChange}
+                placeholder="https://empresa.com"
+                className={inputClass}
+              />
+              <FieldError msg={fieldErrors.sitio_web} />
+            </div>
+            <div>
+              <label className={labelClass}>Instagram</label>
+              <input
+                type="text"
+                name="instagram"
+                value={form.instagram}
+                onChange={(e) => setForm((p) => ({ ...p, instagram: e.target.value }))}
+                placeholder="@usuario"
+                className={inputClass}
+              />
+            </div>
+            <div>
+              <label className={labelClass}>LinkedIn</label>
+              <input
+                type="text"
+                name="linkedin"
+                value={form.linkedin}
+                onChange={(e) => setForm((p) => ({ ...p, linkedin: e.target.value }))}
+                placeholder="URL o perfil"
+                className={inputClass}
+              />
+            </div>
+          </div>
+        </section>
+
         {/* Datos comerciales */}
         <section className={sectionWrap}>
           <SectionTitle>Datos comerciales</SectionTitle>
@@ -792,6 +955,33 @@ function ClienteNuevoFormInner({ variant = "page", onCreated, onCancel, fromPros
                   <option value="90 DÍAS">90 días</option>
                   <option value="MENSUAL">Mensual</option>
                 </select>
+              </div>
+              <div>
+                <label className={labelClass}>Moneda preferida</label>
+                <select
+                  name="moneda_preferida"
+                  value={form.moneda_preferida}
+                  onChange={(e) =>
+                    setForm((prev) => ({ ...prev, moneda_preferida: e.target.value === "USD" ? "USD" : "GS" }))
+                  }
+                  className={inputClass}
+                >
+                  <option value="GS">Guaraníes (Gs.)</option>
+                  <option value="USD">Dólares (USD)</option>
+                </select>
+              </div>
+            </div>
+
+            <div className="grid gap-4 sm:grid-cols-2">
+              <div>
+                <label className={labelClass}>Valor anual estimado (Gs.)</label>
+                <MontoInput
+                  value={form.valor_cliente}
+                  onChange={(n) => setForm((p) => ({ ...p, valor_cliente: String(n) }))}
+                  className={inputClass}
+                  decimals={false}
+                  placeholder="Opcional"
+                />
               </div>
               <div>
                 <label className={labelClass}>Vendedor responsable</label>

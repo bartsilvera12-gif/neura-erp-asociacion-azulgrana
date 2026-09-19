@@ -10,6 +10,7 @@ import { ensureSemillasCatalogoTipos, tipoServicioSlugValido } from "@/lib/clien
 import { buscarDuplicadosCliente } from "@/lib/clientes/dedupe";
 import { nombreClienteDisplay } from "@/lib/clientes/display-name";
 import { registrarHistorialCliente } from "@/lib/clientes/historial";
+import { limpiarDocumento, validarPayloadCliente } from "@/lib/clientes/validators";
 
 /** Une `plan_activo` (nombre) a cada fila de cliente según suscripción activa más reciente. */
 function attachPlanesActivos(
@@ -224,10 +225,16 @@ export async function POST(request: NextRequest) {
       ruc,
       documento,
       telefono,
+      telefono_secundario,
       email,
+      email_secundario,
       direccion,
       ciudad,
       pais,
+      sitio_web,
+      instagram,
+      linkedin,
+      valor_cliente,
       sifen_receptor_extranjero,
       sifen_codigo_pais,
       sifen_tipo_doc_receptor,
@@ -260,6 +267,28 @@ export async function POST(request: NextRequest) {
 
     if (!nombre_contacto?.trim()) {
       return NextResponse.json(errorResponse("nombre_contacto es obligatorio"), { status: 400 });
+    }
+
+    // Validación simétrica con el form: si un valor pasa la UI pero llega mal
+    // (curl, integración externa, race con validación cliente), lo rechazamos
+    // acá con el mismo mensaje humano.
+    const errValidacion = validarPayloadCliente({
+      tipo_cliente,
+      empresa,
+      nombre_contacto,
+      razon_social,
+      ruc,
+      ruc_factura,
+      documento,
+      telefono,
+      telefono_secundario,
+      email,
+      email_secundario,
+      sitio_web,
+      numero_socio,
+    });
+    if (errValidacion) {
+      return NextResponse.json(errorResponse(errValidacion), { status: 400 });
     }
 
     // Anti-duplicados (backend): bloquear si ya existe por documento o nombre principal.
@@ -318,12 +347,22 @@ export async function POST(request: NextRequest) {
       nombre:               nombre_contacto.trim(),
       nombre_contacto:      nombre_contacto.trim(),
       ruc:                  ruc?.trim() || null,
-      documento:            documento?.trim() || null,
+      documento:            limpiarDocumento(documento),
       telefono:             telefono?.trim() || null,
+      telefono_secundario:  typeof telefono_secundario === "string" && telefono_secundario.trim() ? telefono_secundario.trim() : null,
       email:                email?.trim() || null,
+      email_secundario:     typeof email_secundario === "string" && email_secundario.trim() ? email_secundario.trim().toLowerCase() : null,
       direccion:            direccion?.trim() || null,
       ciudad:               ciudad?.trim() || null,
       pais:                 pais?.trim() || null,
+      sitio_web:            typeof sitio_web === "string" && sitio_web.trim() ? sitio_web.trim() : null,
+      instagram:            typeof instagram === "string" && instagram.trim() ? instagram.trim() : null,
+      linkedin:             typeof linkedin === "string" && linkedin.trim() ? linkedin.trim() : null,
+      valor_cliente:        (() => {
+        if (valor_cliente == null || valor_cliente === "") return null;
+        const n = Number(valor_cliente);
+        return Number.isFinite(n) && n >= 0 ? n : null;
+      })(),
       condicion_pago:       condicion_pago?.trim() || null,
       moneda_preferida:     moneda_preferida === "USD" ? "USD" : "GS",
       estado:               estado === "inactivo" ? "inactivo" : "activo",
@@ -392,6 +431,14 @@ export async function POST(request: NextRequest) {
       // Candado duro en DB: índice único por documento normalizado (carrera que evade el chequeo app).
       const errCode = (error as { code?: string }).code;
       if (errCode === "23505" || /ux_clientes_documento_norm/i.test(error.message)) {
+        // Distinguir socio duplicado vs documento duplicado: mensajes distintos
+        // ayudan a corregir el campo correcto en el form.
+        if (/numero_socio/i.test(error.message)) {
+          return NextResponse.json(
+            errorResponse("Ya hay otro cliente registrado con este N° de socio."),
+            { status: 409 }
+          );
+        }
         return NextResponse.json(
           {
             success: false,
