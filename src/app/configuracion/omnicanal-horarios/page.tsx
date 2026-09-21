@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
 import { fetchWithSupabaseSession } from "@/lib/api/fetch-with-supabase-session";
 import {
@@ -40,6 +41,14 @@ function sliceTime(t: string): string {
 }
 
 export default function OmnicanalHorariosPage() {
+  const router = useRouter();
+  const goBack = () => {
+    if (typeof window !== "undefined" && window.history.length > 1) {
+      router.back();
+      return;
+    }
+    router.push("/configuracion");
+  };
   const [allowed, setAllowed] = useState<boolean | null>(null);
   const [rows, setRows] = useState<OmnicanalWorkScheduleRow[]>([]);
   const [loading, setLoading] = useState(true);
@@ -186,8 +195,9 @@ export default function OmnicanalHorariosPage() {
             .
           </p>
         </div>
-        <Link
-          href="/configuracion"
+        <button
+          type="button"
+          onClick={goBack}
           className="inline-flex shrink-0 items-center gap-1.5 self-start rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 shadow-sm transition-colors hover:border-[#4FAEB2]/60 hover:bg-[#4FAEB2]/5 hover:text-[#3F8E91]"
         >
           <svg
@@ -204,8 +214,8 @@ export default function OmnicanalHorariosPage() {
             <line x1="19" y1="12" x2="5" y2="12" />
             <polyline points="12 19 5 12 12 5" />
           </svg>
-          Volver al centro
-        </Link>
+          Volver al apartado anterior
+        </button>
       </div>
 
       {error && (

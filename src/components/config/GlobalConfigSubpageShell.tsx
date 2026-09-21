@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 
 /**
  * Shell unificado para sub-páginas de Configuración Global.
@@ -22,6 +23,17 @@ export function GlobalConfigSubpageShell({
   maxWidthClassName?: string;
   children: React.ReactNode;
 }) {
+  const router = useRouter();
+  const handleBack = () => {
+    // Volvemos al apartado que trajo al usuario acá (p. ej. la pantalla
+    // que abrió esta sub-página desde su lista de accesos). Si no hay
+    // historial usable, caemos al centro de Configuración.
+    if (typeof window !== "undefined" && window.history.length > 1) {
+      router.back();
+      return;
+    }
+    router.push("/configuracion");
+  };
   return (
     <div className={`mx-auto w-full ${maxWidthClassName} space-y-8 px-4 pb-10 pt-2 sm:px-6 lg:px-8`}>
       {/* Breadcrumb */}
@@ -57,8 +69,9 @@ export function GlobalConfigSubpageShell({
             <p className="mt-1 max-w-2xl text-sm text-slate-500">{description}</p>
           ) : null}
         </div>
-        <Link
-          href="/configuracion"
+        <button
+          type="button"
+          onClick={handleBack}
           className="inline-flex shrink-0 items-center gap-1.5 self-start rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 shadow-sm transition-colors hover:border-[#4FAEB2]/60 hover:bg-[#4FAEB2]/5 hover:text-[#3F8E91]"
         >
           <svg
@@ -75,8 +88,8 @@ export function GlobalConfigSubpageShell({
             <line x1="19" y1="12" x2="5" y2="12" />
             <polyline points="12 19 5 12 12 5" />
           </svg>
-          Volver al centro
-        </Link>
+          Volver al apartado anterior
+        </button>
       </div>
 
       {children}
