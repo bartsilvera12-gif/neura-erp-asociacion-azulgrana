@@ -155,6 +155,31 @@ function ClienteNuevoFormInner({ variant = "page", onCreated, onCancel, fromPros
     getPlanes().then(setPlanes);
   }, []);
 
+  // Pre-carga el N° de socio con el siguiente libre (MAX+1). Es solo sugerencia:
+  // el usuario puede editarlo o borrarlo si prefiere dejarlo vacío. Si el fetch
+  // falla, arrancamos vacío (nunca bloqueamos el form).
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const { fetchWithSupabaseSession } = await import("@/lib/api/fetch-with-supabase-session");
+        const res = await fetchWithSupabaseSession("/api/clientes/next-numero-socio", { cache: "no-store" });
+        if (!res.ok) return;
+        const json = (await res.json()) as { success?: boolean; data?: { next?: number } };
+        if (cancelled) return;
+        const next = json?.data?.next;
+        if (typeof next === "number" && Number.isFinite(next) && next > 0) {
+          setForm((prev) => (prev.numero_socio ? prev : { ...prev, numero_socio: String(next) }));
+        }
+      } catch {
+        // Silencioso: si falla, dejamos el input vacío. No es bloqueante.
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
   useEffect(() => {
     let cancelled = false;
     (async () => {
@@ -638,7 +663,7 @@ function ClienteNuevoFormInner({ variant = "page", onCreated, onCancel, fromPros
 
             <div className="grid gap-4 sm:grid-cols-2">
               <div>
-                <label className={labelClass}>N° Socio</label>
+                <label className={labelClass}>N° Socio (sugerido, editable)</label>
                 <input
                   type="number"
                   min={1}
@@ -646,9 +671,12 @@ function ClienteNuevoFormInner({ variant = "page", onCreated, onCancel, fromPros
                   name="numero_socio"
                   value={form.numero_socio}
                   onChange={(e) => setForm((prev) => ({ ...prev, numero_socio: e.target.value.replace(/[^0-9]/g, "") }))}
-                  placeholder="Ej. 123"
+                  placeholder="Siguiente libre — podés cambiarlo o dejarlo vacío"
                   className={inputClass}
                 />
+                <p className="mt-1 text-xs text-slate-500">
+                  Se sugiere el siguiente número libre. Podés editarlo o dejarlo vacío para asignarlo después.
+                </p>
                 <FieldError msg={fieldErrors.numero_socio} />
               </div>
               <div>

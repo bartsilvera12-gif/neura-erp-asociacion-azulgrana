@@ -3,6 +3,8 @@ import { getCurrentUser } from "@/lib/auth";
 import { getBrowserSupabaseForEmpresaData } from "@/lib/supabase/browser-data-client";
 import type { Cliente, EstadoCliente, NotaCliente, PerfilTributarioCliente } from "./types";
 import { nombreClienteDisplay } from "./display-name";
+import { calcularNextNumeroSocio } from "./next-numero-socio";
+import type { AppSupabaseClient } from "@/lib/supabase/schema";
 
 // ─── Tipo de fila Supabase ────────────────────────────────────────────────────
 // RLS maneja empresa_id automáticamente; no filtrar manualmente en SELECT
@@ -351,6 +353,27 @@ export async function saveCliente(datos: NuevoClienteData): Promise<Cliente | nu
     .single();
 
   if (error) {
+    // 23505 sobre numero_socio: mensaje humano con el siguiente libre para no forzar
+    // al usuario a adivinar cuál está tomado (mismo texto que devuelve la ruta POST).
+    const errCode = (error as { code?: string }).code;
+    if (errCode === "23505" && /numero_socio/i.test(error.message)) {
+      const intentado = insert.numero_socio ?? null;
+      let siguienteLibre: number | null = null;
+      try {
+        siguienteLibre = await calcularNextNumeroSocio(
+          supabase as unknown as AppSupabaseClient,
+          usuario.empresa_id
+        );
+      } catch (e) {
+        console.error("[clientes] saveCliente next numero_socio:", e instanceof Error ? e.message : e);
+      }
+      const cabeza = `El N° de socio ${intentado ?? "(?)"} ya está en uso por otro cliente.`;
+      const cola =
+        siguienteLibre != null
+          ? ` Podés dejarlo vacío para asignarlo después, o probá con ${siguienteLibre} (siguiente libre).`
+          : " Podés dejarlo vacío para asignarlo después.";
+      throw new Error(cabeza + cola);
+    }
     console.error("[clientes] saveCliente:", error.message);
     return null;
   }

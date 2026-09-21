@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 import { getProspectos, saveProspecto } from "@/lib/crm/storage";
 import { getEtapas } from "@/lib/crm/etapas";
-import { getCurrentUser } from "@/lib/auth";
+import { fetchWithSupabaseSession } from "@/lib/api/fetch-with-supabase-session";
 import { getUsuariosActivosEmpresa, type UsuarioEmpresa } from "@/lib/usuarios/empresa";
 import { getPlanes } from "@/lib/planes/storage";
 import PlanSelector from "@/components/crm/PlanSelector";
@@ -66,6 +66,7 @@ export default function ProspectoNuevoForm({
   const [etapas, setEtapas] = useState<EtapaCrm[]>([]);
   const [cargandoPlanes, setCargandoPlanes] = useState(true);
   const [usuarioActual, setUsuarioActual] = useState<{ nombre?: string; email?: string } | null>(null);
+  const [usuarioActualLoading, setUsuarioActualLoading] = useState(true);
   const [usuariosEmpresa, setUsuariosEmpresa] = useState<UsuarioEmpresa[]>([]);
   const [telefonosHistorial, setTelefonosHistorial] = useState<string[]>([]);
   const [saving, setSaving] = useState(false);
@@ -94,17 +95,37 @@ export default function ProspectoNuevoForm({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // "Creado por" antes leía `usuarios` desde el navegador vía getCurrentUser(): si
+  // esa lectura fallaba o devolvía vacío, el input quedaba en "Cargando…" para
+  // siempre y confundía a QA. Ahora resolvemos el usuario logueado server-side
+  // vía /api/usuarios/me (mismo endpoint que usa el header) y siempre apagamos
+  // el flag de carga en el finally, aunque el fetch falle.
   useEffect(() => {
-    getCurrentUser()
-      .then((u) =>
-        u
-          ? setUsuarioActual({
-              nombre: (u as { nombre?: string }).nombre,
-              email: (u as { email?: string }).email,
-            })
-          : null,
-      )
-      .catch(() => setUsuarioActual(null));
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetchWithSupabaseSession("/api/usuarios/me", { cache: "no-store" });
+        if (!res.ok) return;
+        const json = (await res.json()) as {
+          usuario?: { nombre?: string | null; email?: string | null } | null;
+        };
+        if (cancelled) return;
+        const u = json?.usuario;
+        if (u && (u.nombre || u.email)) {
+          setUsuarioActual({
+            nombre: (u.nombre ?? "").trim() || undefined,
+            email: (u.email ?? "").trim() || undefined,
+          });
+        }
+      } catch {
+        // Silencioso: la UI cae al texto por defecto abajo. No bloqueamos el save.
+      } finally {
+        if (!cancelled) setUsuarioActualLoading(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   useEffect(() => {
@@ -444,11 +465,14 @@ export default function ProspectoNuevoForm({
                 <input
                   type="text"
                   readOnly
-                  value={usuarioActual?.nombre?.trim() || usuarioActual?.email || "Cargando…"}
+                  value={
+                    (usuarioActual?.nombre?.trim() || usuarioActual?.email) ??
+                    (usuarioActualLoading ? "Cargando…" : "Se asigna al usuario que crea el prospecto")
+                  }
                   className={`${INPUT_CLS} cursor-not-allowed bg-slate-50`}
                 />
                 <p className="mt-1 text-xs text-slate-500">
-                  Se registra automáticamente con tu usuario
+                  Se asigna al usuario que crea el prospecto.
                 </p>
               </div>
             </div>

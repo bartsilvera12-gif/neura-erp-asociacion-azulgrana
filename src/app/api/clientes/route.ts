@@ -11,6 +11,7 @@ import { buscarDuplicadosCliente } from "@/lib/clientes/dedupe";
 import { nombreClienteDisplay } from "@/lib/clientes/display-name";
 import { registrarHistorialCliente } from "@/lib/clientes/historial";
 import { limpiarDocumento, validarPayloadCliente } from "@/lib/clientes/validators";
+import { calcularNextNumeroSocio } from "@/lib/clientes/next-numero-socio";
 
 /** Une `plan_activo` (nombre) a cada fila de cliente según suscripción activa más reciente. */
 function attachPlanesActivos(
@@ -434,10 +435,19 @@ export async function POST(request: NextRequest) {
         // Distinguir socio duplicado vs documento duplicado: mensajes distintos
         // ayudan a corregir el campo correcto en el form.
         if (/numero_socio/i.test(error.message)) {
-          return NextResponse.json(
-            errorResponse("Ya hay otro cliente registrado con este N° de socio."),
-            { status: 409 }
-          );
+          const intentado = (insertBase as { numero_socio: number | null }).numero_socio;
+          let siguienteLibre: number | null = null;
+          try {
+            siguienteLibre = await calcularNextNumeroSocio(supabase, auth.empresa_id);
+          } catch (e) {
+            console.error("[api/clientes] next numero_socio tras 23505:", e instanceof Error ? e.message : e);
+          }
+          const cabeza = `El N° de socio ${intentado ?? "(?)"} ya está en uso por otro cliente.`;
+          const cola =
+            siguienteLibre != null
+              ? ` Podés dejarlo vacío para asignarlo después, o probá con ${siguienteLibre} (siguiente libre).`
+              : " Podés dejarlo vacío para asignarlo después.";
+          return NextResponse.json(errorResponse(cabeza + cola), { status: 409 });
         }
         return NextResponse.json(
           {
