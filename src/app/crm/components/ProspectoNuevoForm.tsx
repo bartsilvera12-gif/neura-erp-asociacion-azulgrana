@@ -212,13 +212,13 @@ export default function ProspectoNuevoForm({
         observaciones: form.observaciones.trim() || null,
       });
 
-      if (guardado) {
-        const id =
-          guardado && typeof guardado === "object" && "id" in guardado
-            ? ((guardado as { id?: string }).id ?? undefined)
-            : undefined;
-        onCreated?.(id);
-      }
+      const id =
+        guardado && typeof guardado === "object" && "id" in guardado
+          ? ((guardado as { id?: string }).id ?? undefined)
+          : undefined;
+      onCreated?.(id);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "No se pudo guardar el prospecto. Probá de nuevo.");
     } finally {
       setSaving(false);
     }

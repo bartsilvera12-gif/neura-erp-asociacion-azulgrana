@@ -243,41 +243,41 @@ export type NuevoProspectoData = Omit<
 /** Crea prospecto vía API tenant (mismo mecanismo que el listado; evita RLS del browser en `erp_*`). */
 export async function saveProspecto(
   datos: NuevoProspectoData
-): Promise<Prospecto | null> {
-  if (typeof window === "undefined") return null;
-  const usuario = await getCurrentUser();
-  if (!usuario?.empresa_id) throw new Error("Usuario no autenticado o sin empresa");
-
-  try {
-    const res = await fetchWithSupabaseSession("/api/crm/prospectos", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        empresa: datos.empresa,
-        contacto: datos.contacto,
-        email: datos.email ?? null,
-        telefono: datos.telefono ?? null,
-        servicio: datos.servicio,
-        valor_estimado: datos.valor_estimado ?? 0,
-        etapa: datos.etapa ?? "LEAD",
-        proxima_accion: datos.proxima_accion ?? null,
-        fecha_proxima_accion: datos.fecha_proxima_accion ?? null,
-        responsable: datos.responsable ?? null,
-        responsable_usuario_id: datos.responsable_usuario_id ?? null,
-        observaciones: datos.observaciones?.trim() || null,
-      }),
-    });
-    const json = (await res.json()) as { success?: boolean; data?: Prospecto; error?: string };
-    if (!res.ok) {
-      console.error("[crm] saveProspecto API:", res.status, json.error);
-      return null;
-    }
-    if (!json.success || !json.data) return null;
-    return json.data;
-  } catch (e) {
-    console.error("[crm] saveProspecto:", e);
-    return null;
+): Promise<Prospecto> {
+  if (typeof window === "undefined") {
+    throw new Error("saveProspecto solo se puede llamar desde el navegador");
   }
+  // La empresa y usuario los resuelve el endpoint /api/crm/prospectos server-side
+  // a partir de la sesion. No dependemos de getCurrentUser() en el cliente porque
+  // en algunos schemas tenant esa lectura falla por RLS y no queremos bloquear
+  // el guardado.
+  const res = await fetchWithSupabaseSession("/api/crm/prospectos", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      empresa: datos.empresa,
+      contacto: datos.contacto,
+      email: datos.email ?? null,
+      telefono: datos.telefono ?? null,
+      servicio: datos.servicio,
+      valor_estimado: datos.valor_estimado ?? 0,
+      etapa: datos.etapa ?? "LEAD",
+      proxima_accion: datos.proxima_accion ?? null,
+      fecha_proxima_accion: datos.fecha_proxima_accion ?? null,
+      responsable: datos.responsable ?? null,
+      responsable_usuario_id: datos.responsable_usuario_id ?? null,
+      observaciones: datos.observaciones?.trim() || null,
+    }),
+  });
+  const json = (await res.json().catch(() => ({}))) as {
+    success?: boolean;
+    data?: Prospecto;
+    error?: string;
+  };
+  if (!res.ok || !json.success || !json.data) {
+    throw new Error(json.error || `No se pudo guardar el prospecto (HTTP ${res.status}).`);
+  }
+  return json.data;
 }
 
 /** Crea prospecto desde webhook (WhatsApp, n8n, etc.). Usa service role para bypass RLS. */
