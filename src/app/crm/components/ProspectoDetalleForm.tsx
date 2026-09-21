@@ -331,6 +331,13 @@ export default function ProspectoDetalleForm({
   }
 
   async function handleEliminar() {
+    // Confirmación nativa del navegador: imposible de perderse por scroll.
+    if (typeof window !== "undefined") {
+      const ok = window.confirm(
+        "¿Eliminar permanentemente este prospecto?\n\nEsta acción no se puede deshacer.",
+      );
+      if (!ok) return;
+    }
     setErrorEliminar(null);
     setEliminando(true);
     try {
@@ -338,9 +345,10 @@ export default function ProspectoDetalleForm({
       setConfirmarEliminar(false);
       onDeleted?.();
     } catch (err) {
-      setErrorEliminar(
-        err instanceof Error ? err.message : "No se pudo eliminar el prospecto. Probá de nuevo.",
-      );
+      const msg =
+        err instanceof Error ? err.message : "No se pudo eliminar el prospecto. Probá de nuevo.";
+      setErrorEliminar(msg);
+      if (typeof window !== "undefined") window.alert("Error al eliminar el prospecto:\n\n" + msg);
     } finally {
       setEliminando(false);
     }
@@ -417,8 +425,9 @@ export default function ProspectoDetalleForm({
             </div>
           </div>
           <button
-            onClick={() => setConfirmarEliminar(true)}
-            className="rounded-lg p-2 text-rose-400 transition-colors hover:bg-rose-50 hover:text-rose-700"
+            onClick={handleEliminar}
+            disabled={eliminando}
+            className="rounded-lg p-2 text-rose-400 transition-colors hover:bg-rose-50 hover:text-rose-700 disabled:cursor-not-allowed disabled:opacity-60"
             title="Eliminar prospecto"
             aria-label="Eliminar prospecto"
           >
@@ -793,8 +802,9 @@ export default function ProspectoDetalleForm({
           <div className="flex justify-end">
             <button
               type="button"
-              onClick={() => setConfirmarEliminar(true)}
-              className="inline-flex items-center gap-1.5 rounded-xl border border-rose-200 bg-white px-4 py-2 text-sm font-medium text-rose-600 shadow-sm transition-colors hover:bg-rose-50"
+              onClick={handleEliminar}
+              disabled={eliminando}
+              className="inline-flex items-center gap-1.5 rounded-xl border border-rose-200 bg-white px-4 py-2 text-sm font-medium text-rose-600 shadow-sm transition-colors hover:bg-rose-50 disabled:cursor-not-allowed disabled:opacity-60"
             >
               <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="h-4 w-4">
                 <path
