@@ -346,12 +346,18 @@ export async function saveProspectoFromWebhook(datos: {
   return rowToProspecto(prospecto, []);
 }
 
-/** Actualiza prospecto vía API tenant (Postgres directo en schemas `erp_*` no expuestos). */
+/**
+ * Actualiza prospecto vía API tenant (Postgres directo en schemas `erp_*` no expuestos).
+ * Propaga el error real al caller para que la UI pueda mostrar un mensaje concreto
+ * (mismo patrón que `saveProspecto`, evitando el fallo silencioso previo).
+ */
 export async function updateProspecto(
   id: string,
   datos: Partial<Omit<Prospecto, "id" | "numero_control" | "notas" | "fecha_creacion">>
-): Promise<Prospecto | null> {
-  if (typeof window === "undefined") return null;
+): Promise<Prospecto> {
+  if (typeof window === "undefined") {
+    throw new Error("updateProspecto solo se puede llamar desde el navegador");
+  }
 
   const patch: Record<string, unknown> = {};
   if (datos.empresa !== undefined) patch.empresa = datos.empresa;
@@ -367,26 +373,24 @@ export async function updateProspecto(
   if (datos.responsable !== undefined) patch.responsable = datos.responsable ?? null;
   if (datos.responsable_usuario_id !== undefined)
     patch.responsable_usuario_id = datos.responsable_usuario_id ?? null;
+  if (datos.observaciones !== undefined) patch.observaciones = datos.observaciones ?? null;
   if (datos.cliente_creado !== undefined) patch.cliente_creado = datos.cliente_creado;
   patch.fecha_actualizacion = new Date().toISOString();
 
-  try {
-    const res = await fetchWithSupabaseSession(`/api/crm/prospectos/${encodeURIComponent(id)}`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(patch),
-    });
-    const json = (await res.json()) as { success?: boolean; data?: Prospecto; error?: string };
-    if (!res.ok) {
-      console.error("[crm] updateProspecto API:", res.status, json.error);
-      return null;
-    }
-    if (!json.success || !json.data) return null;
-    return json.data;
-  } catch (e) {
-    console.error("[crm] updateProspecto:", e);
-    return null;
+  const res = await fetchWithSupabaseSession(`/api/crm/prospectos/${encodeURIComponent(id)}`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(patch),
+  });
+  const json = (await res.json().catch(() => ({}))) as {
+    success?: boolean;
+    data?: Prospecto;
+    error?: string;
+  };
+  if (!res.ok || !json.success || !json.data) {
+    throw new Error(json.error || `No se pudo actualizar el prospecto (HTTP ${res.status}).`);
   }
+  return json.data;
 }
 
 /** Cambia la etapa del prospecto. */
@@ -430,18 +434,28 @@ export async function addNota(
   }
 }
 
-/** Elimina un prospecto (y sus notas por CASCADE), vía API tenant. */
+/**
+ * Elimina un prospecto (y sus notas por CASCADE), vía API tenant.
+ * Propaga el error real (mismo patrón que `saveProspecto`): antes atrapaba todo en
+ * silencio y la UI mostraba "no pasó nada" cuando en realidad el DELETE fallaba
+ * (p. ej. schema tenant sin las columnas esperadas o RLS).
+ */
 export async function deleteProspecto(id: string): Promise<void> {
-  if (typeof window === "undefined") return;
-  try {
-    const res = await fetchWithSupabaseSession(`/api/crm/prospectos/${encodeURIComponent(id)}`, {
-      method: "DELETE",
-    });
-    if (!res.ok) {
+  if (typeof window === "undefined") {
+    throw new Error("deleteProspecto solo se puede llamar desde el navegador");
+  }
+  const res = await fetchWithSupabaseSession(`/api/crm/prospectos/${encodeURIComponent(id)}`, {
+    method: "DELETE",
+  });
+  if (!res.ok) {
+    let msg = `HTTP ${res.status}`;
+    try {
+      const j = (await res.json()) as { error?: string };
+      if (j?.error) msg = j.error;
+    } catch {
       const t = await res.text().catch(() => "");
-      console.error("[crm] deleteProspecto API:", res.status, t);
+      if (t) msg = t;
     }
-  } catch (e) {
-    console.error("[crm] deleteProspecto:", e);
+    throw new Error(msg || "No se pudo eliminar el prospecto.");
   }
 }

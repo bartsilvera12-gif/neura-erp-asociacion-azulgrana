@@ -512,7 +512,13 @@ function ClienteNuevoFormInner({ variant = "page", onCreated, onCancel, fromPros
     }
 
     if (form.prospecto_id) {
-      await updateProspecto(form.prospecto_id, { cliente_creado: true });
+      // Best-effort: marcar el prospecto como convertido a cliente. Si falla la marca,
+      // el cliente ya se creó — no queremos abortar el flujo.
+      try {
+        await updateProspecto(form.prospecto_id, { cliente_creado: true });
+      } catch (e) {
+        console.warn("[clientes] no se pudo marcar prospecto como cliente_creado", e);
+      }
     }
 
     setGuardando(false);

@@ -18,6 +18,7 @@ import type { EtapaCrm } from "@/lib/crm/etapas";
 import type { Nota, Prospecto } from "@/lib/crm/types";
 import type { Plan } from "@/lib/planes/types";
 import { FechaSelect } from "@/components/ui/FechaSelect";
+import { cleanTelefono, isValidTelefono } from "@/lib/telefono";
 
 export type ProspectoDetalleFormProps = {
   id: string;
@@ -106,6 +107,9 @@ export default function ProspectoDetalleForm({
   const notaInputRef = useRef<HTMLTextAreaElement>(null);
 
   const [errorForm, setErrorForm] = useState<string | null>(null);
+  const [okMsg, setOkMsg] = useState<string | null>(null);
+  const [errorEliminar, setErrorEliminar] = useState<string | null>(null);
+  const [eliminando, setEliminando] = useState(false);
   const [confirmarEliminar, setConfirmarEliminar] = useState(false);
   const [planes, setPlanes] = useState<Plan[]>([]);
   const [etapas, setEtapas] = useState<EtapaCrm[]>([]);
@@ -237,6 +241,11 @@ export default function ProspectoDetalleForm({
     setErrorForm(null);
     const { name, value } = e.target;
     const type = (e.target as HTMLInputElement).type;
+    if (name === "telefono") {
+      const raw = cleanTelefono(value);
+      setForm((prev) => ({ ...prev, telefono: raw }));
+      return;
+    }
     const upper = ["empresa", "contacto", "responsable"];
     let normalized = value;
     if (name === "email" || type === "email") normalized = value.toLowerCase();
@@ -262,8 +271,14 @@ export default function ProspectoDetalleForm({
   async function handleGuardar(e: React.FormEvent) {
     e.preventDefault();
     setErrorForm(null);
+    setOkMsg(null);
     if (!form.empresa.trim()) return setErrorForm("La empresa es obligatoria.");
     if (!form.contacto.trim()) return setErrorForm("El contacto es obligatorio.");
+    if (form.telefono && !isValidTelefono(form.telefono)) {
+      return setErrorForm(
+        "Número inválido. Usá formato local 0981100453 o internacional +595981100453.",
+      );
+    }
 
     const servicioTexto = form.planIds
       .map((pid) => planesActivos.find((p) => p.id === pid)?.nombre)
@@ -272,11 +287,11 @@ export default function ProspectoDetalleForm({
 
     setSaving(true);
     try {
-      const actualizado = await updateProspecto(id, {
+      await updateProspecto(id, {
         empresa: form.empresa.trim().toUpperCase(),
         contacto: form.contacto.trim().toUpperCase(),
         email: form.email.trim() || undefined,
-        telefono: form.telefono.trim() || undefined,
+        telefono: form.telefono.trim() ? cleanTelefono(form.telefono) : undefined,
         servicio: servicioTexto,
         valor_estimado: valorEstimado,
         proxima_accion: form.proxima_accion.trim() || undefined,
@@ -285,10 +300,13 @@ export default function ProspectoDetalleForm({
         responsable_usuario_id: form.responsable_usuario_id || null,
         observaciones: form.observaciones.trim() ? form.observaciones.trim() : null,
       });
-      if (actualizado) {
-        await cargar();
-        onUpdated?.();
-      }
+      await cargar();
+      setOkMsg("Cambios guardados.");
+      onUpdated?.();
+    } catch (err) {
+      setErrorForm(
+        err instanceof Error ? err.message : "No se pudo actualizar el prospecto. Probá de nuevo.",
+      );
     } finally {
       setSaving(false);
     }
@@ -313,8 +331,19 @@ export default function ProspectoDetalleForm({
   }
 
   async function handleEliminar() {
-    await deleteProspecto(id);
-    onDeleted?.();
+    setErrorEliminar(null);
+    setEliminando(true);
+    try {
+      await deleteProspecto(id);
+      setConfirmarEliminar(false);
+      onDeleted?.();
+    } catch (err) {
+      setErrorEliminar(
+        err instanceof Error ? err.message : "No se pudo eliminar el prospecto. Probá de nuevo.",
+      );
+    } finally {
+      setEliminando(false);
+    }
   }
 
   // ── Estados de carga / not found ─────────────────────────────────────────
@@ -413,24 +442,34 @@ export default function ProspectoDetalleForm({
       >
         {/* Confirmación eliminar (común a ambas variants) */}
         {confirmarEliminar ? (
-          <div className="flex items-center justify-between gap-4 rounded-xl border border-rose-200 bg-rose-50 px-4 py-3">
-            <p className="text-sm font-medium text-rose-700">
-              ¿Eliminar permanentemente este prospecto?
-            </p>
-            <div className="flex shrink-0 gap-2">
-              <button
-                onClick={handleEliminar}
-                className="rounded-lg bg-rose-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-rose-700"
-              >
-                Sí, eliminar
-              </button>
-              <button
-                onClick={() => setConfirmarEliminar(false)}
-                className="rounded-lg border border-rose-200 px-3 py-1.5 text-xs text-rose-600 hover:bg-rose-100"
-              >
-                Cancelar
-              </button>
+          <div className="space-y-2 rounded-xl border border-rose-200 bg-rose-50 px-4 py-3">
+            <div className="flex items-center justify-between gap-4">
+              <p className="text-sm font-medium text-rose-700">
+                ¿Eliminar permanentemente este prospecto?
+              </p>
+              <div className="flex shrink-0 gap-2">
+                <button
+                  onClick={handleEliminar}
+                  disabled={eliminando}
+                  className="rounded-lg bg-rose-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-rose-700 disabled:cursor-not-allowed disabled:bg-rose-300"
+                >
+                  {eliminando ? "Eliminando…" : "Sí, eliminar"}
+                </button>
+                <button
+                  onClick={() => {
+                    setConfirmarEliminar(false);
+                    setErrorEliminar(null);
+                  }}
+                  disabled={eliminando}
+                  className="rounded-lg border border-rose-200 px-3 py-1.5 text-xs text-rose-600 hover:bg-rose-100 disabled:cursor-not-allowed"
+                >
+                  Cancelar
+                </button>
+              </div>
             </div>
+            {errorEliminar ? (
+              <p className="text-xs font-medium text-rose-700">⚠ {errorEliminar}</p>
+            ) : null}
           </div>
         ) : null}
 
@@ -671,6 +710,12 @@ export default function ProspectoDetalleForm({
               <div className="flex items-center gap-2 rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">
                 <span>⚠</span>
                 <span className="font-medium">{errorForm}</span>
+              </div>
+            ) : null}
+            {okMsg && !errorForm ? (
+              <div className="flex items-center gap-2 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700">
+                <span>✓</span>
+                <span className="font-medium">{okMsg}</span>
               </div>
             ) : null}
 
