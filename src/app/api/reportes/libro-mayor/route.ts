@@ -22,7 +22,11 @@ export async function GET(request: NextRequest) {
     const out = await listLibroMayor(schema, auth.empresaId, mayorFiltersFromUrl(new URL(request.url)));
     return NextResponse.json(successResponse(out));
   } catch (e) {
-    console.error("[/api/reportes/libro-mayor GET]", e instanceof Error ? e.message : e);
-    return NextResponse.json(errorResponse("No se pudo generar el Libro Mayor."), { status: 500 });
+    const detail = e instanceof Error ? e.message : String(e);
+    console.error("[/api/reportes/libro-mayor GET]", detail);
+    return NextResponse.json(
+      errorResponse(`No se pudo generar el Libro Mayor: ${detail}`),
+      { status: 500 }
+    );
   }
 }

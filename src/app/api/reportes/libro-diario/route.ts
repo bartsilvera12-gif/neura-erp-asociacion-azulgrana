@@ -22,7 +22,11 @@ export async function GET(request: NextRequest) {
     const out = await listLibroDiario(schema, auth.empresaId, diarioFiltersFromUrl(new URL(request.url)));
     return NextResponse.json(successResponse(out));
   } catch (e) {
-    console.error("[/api/reportes/libro-diario GET]", e instanceof Error ? e.message : e);
-    return NextResponse.json(errorResponse("No se pudo generar el Libro Diario."), { status: 500 });
+    const detail = e instanceof Error ? e.message : String(e);
+    console.error("[/api/reportes/libro-diario GET]", detail);
+    return NextResponse.json(
+      errorResponse(`No se pudo generar el Libro Diario: ${detail}`),
+      { status: 500 }
+    );
   }
 }

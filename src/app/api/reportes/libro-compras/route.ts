@@ -28,7 +28,11 @@ export async function GET(request: NextRequest) {
     const rows = await listLibroCompras(schema, auth.empresaId, filtersFromUrl(new URL(request.url)));
     return NextResponse.json(successResponse({ rows, totals: computeTotals(rows) }));
   } catch (err) {
-    console.error("[/api/reportes/libro-compras GET]", err instanceof Error ? err.message : err);
-    return NextResponse.json(errorResponse("No se pudo generar el Libro de Compras."), { status: 500 });
+    const detail = err instanceof Error ? err.message : String(err);
+    console.error("[/api/reportes/libro-compras GET]", detail);
+    return NextResponse.json(
+      errorResponse(`No se pudo generar el Libro de Compras: ${detail}`),
+      { status: 500 }
+    );
   }
 }
