@@ -703,9 +703,21 @@ export function FacturaElectronicaPanel({
                 ) : null}
               </p>
             )}
-            {fe && estado === "aprobado" && resumen.cancelacion && (
+            {fe && estado === "aprobado" && (
               <div className="flex flex-wrap gap-2 pt-2">
-                {resumen.cancelacion.puede_cancelar ? (
+                <a
+                  href={`/api/facturas/${facturaId}/sifen/kude?download=1`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-1.5 rounded-lg bg-[#4FAEB2] px-3 py-2 text-xs font-semibold text-white shadow-sm transition-colors hover:bg-[#3F8E91]"
+                  title="Descarga el KuDE (PDF oficial con CDC + QR SET) para imprimir"
+                >
+                  <svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor" aria-hidden>
+                    <path d="M19 9h-4V3H9v6H5l7 7 7-7Zm-14 9v2h14v-2H5Z" />
+                  </svg>
+                  Imprimir KuDE
+                </a>
+                {resumen.cancelacion && resumen.cancelacion.puede_cancelar ? (
                   <>
                     <button
                       type="button"
