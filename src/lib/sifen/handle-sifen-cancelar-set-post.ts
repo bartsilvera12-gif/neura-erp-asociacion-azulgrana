@@ -18,7 +18,7 @@ import { errorResponse, successResponse } from "@/lib/api/response";
 import { API_ERRORS } from "@/lib/api/errors";
 import { getFacturasSupabaseFromAuth } from "@/lib/facturacion/facturas-service-client";
 import { decryptSecret } from "@/lib/sifen/security";
-import { downloadSifenCertificadoObject } from "@/lib/sifen/sifen-storage";
+import { downloadSifenCertificadoObject } from "@/lib/sifen/sifen-certificados-storage";
 import type { AmbienteSifen } from "@/lib/sifen/types";
 import { extractKeyAndCertFromP12 } from "@/lib/sifen/sign-xml";
 import { signSifenEventoXml } from "@/lib/sifen/sign-evento-xml";
