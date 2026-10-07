@@ -74,9 +74,10 @@ function blendWithWhite(c: RGB, mix = 0.92): RGB {
   );
 }
 
-/** Contacto Neura en el KuDE (puede diferir del XML del emisor). */
-const NEURA_KUDE_TEL = "0973989068";
-const NEURA_KUDE_EMAIL = "neurautomations@gmail.com";
+/** Contacto que se imprime en el header del KuDE (puede diferir del XML del emisor).
+ *  Azulgrana: datos de la Asociacion, no de Neura. */
+const NEURA_KUDE_TEL = "0973591022";
+const NEURA_KUDE_EMAIL = "asociacionazulgrana@gmail.com";
 
 /** Distancia desde el borde superior de la página hasta la línea base del texto (pt). */
 function baselineFromTop(page: PDFPage, fromTop: number): number {
