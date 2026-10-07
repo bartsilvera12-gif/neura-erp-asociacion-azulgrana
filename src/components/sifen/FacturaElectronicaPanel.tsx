@@ -706,16 +706,28 @@ export function FacturaElectronicaPanel({
             {fe && estado === "aprobado" && (
               <div className="flex flex-wrap gap-2 pt-2">
                 <a
-                  href={`/api/facturas/${facturaId}/sifen/kude?download=1`}
+                  href={`/api/facturas/${facturaId}/sifen/kude`}
                   target="_blank"
                   rel="noopener noreferrer"
                   className="inline-flex items-center gap-1.5 rounded-lg bg-[#4FAEB2] px-3 py-2 text-xs font-semibold text-white shadow-sm transition-colors hover:bg-[#3F8E91]"
-                  title="Descarga el KuDE (PDF oficial con CDC + QR SET) para imprimir"
+                  title="Abre el KuDE (PDF oficial con CDC + QR SET) en el visor del navegador; usá Ctrl+P / icono de impresora para imprimir"
+                >
+                  <svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor" aria-hidden>
+                    <path d="M19 8H5c-1.66 0-3 1.34-3 3v6h4v4h12v-4h4v-6c0-1.66-1.34-3-3-3Zm-3 11H8v-5h8v5Zm3-7a1 1 0 1 1 0-2 1 1 0 0 1 0 2ZM18 3H6v4h12V3Z" />
+                  </svg>
+                  Imprimir KuDE
+                </a>
+                <a
+                  href={`/api/facturas/${facturaId}/sifen/kude?download=1`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-1.5 rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs font-semibold text-slate-700 shadow-sm transition-colors hover:bg-slate-50"
+                  title="Descarga el PDF a tu equipo"
                 >
                   <svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor" aria-hidden>
                     <path d="M19 9h-4V3H9v6H5l7 7 7-7Zm-14 9v2h14v-2H5Z" />
                   </svg>
-                  Imprimir KuDE
+                  Descargar
                 </a>
                 {resumen.cancelacion && resumen.cancelacion.puede_cancelar ? (
                   <>
