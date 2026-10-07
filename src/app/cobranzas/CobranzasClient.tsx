@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { RefreshCw, Search, X, ChevronRight, ExternalLink } from "lucide-react";
 import { fetchWithSupabaseSession } from "@/lib/api/fetch-with-supabase-session";
@@ -1048,15 +1048,15 @@ function RegistrarPagoModal({
             <span className={labelCls}>Fecha de la transferencia</span>
             <FechaSelect value={fecha} onChange={(e) => setFecha(e.target.value)} className={fieldCls} />
           </label>
-          <label className="block">
+          <div className="block">
             <span className={labelCls}>Banco de origen</span>
-            <select value={bancoOrigen} onChange={(e) => setBancoOrigen(e.target.value)} className={fieldCls}>
-              <option value="">— Seleccioná el banco —</option>
-              {bancos.map((b) => (
-                <option key={b.id} value={b.nombre}>{b.nombre}</option>
-              ))}
-            </select>
-          </label>
+            <BancoBuscable
+              value={bancoOrigen}
+              onChange={setBancoOrigen}
+              bancos={bancos.map((b) => b.nombre)}
+              placeholder="Buscá o seleccioná el banco…"
+            />
+          </div>
           <label className="block">
             <span className={labelCls}>Titular (quién envía)</span>
             <input type="text" value={titular} onChange={(e) => setTitular(e.target.value.toUpperCase())} placeholder="Titular de la cuenta que envía" className={`${fieldCls} uppercase placeholder:normal-case`} />
@@ -1104,6 +1104,118 @@ function RegistrarPagoModal({
           </button>
         </div>
       </div>
+    </div>
+  );
+}
+
+// ── BancoBuscable: combobox con filtro por texto ────────────────────────────
+// Reemplaza al <select> nativo cuando la lista de bancos crece (26+). Usuario
+// escribe para filtrar, flechas para navegar, Enter para elegir. Si deja un
+// nombre no listado, se guarda tal cual (acepta libre texto para casos raros).
+function BancoBuscable({
+  value,
+  onChange,
+  bancos,
+  placeholder,
+}: {
+  value: string;
+  onChange: (v: string) => void;
+  bancos: string[];
+  placeholder?: string;
+}) {
+  const [query, setQuery] = useState(value);
+  const [open, setOpen] = useState(false);
+  const [cursor, setCursor] = useState(0);
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    setQuery(value);
+  }, [value]);
+
+  useEffect(() => {
+    if (!open) return;
+    const fuera = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+    };
+    document.addEventListener("mousedown", fuera);
+    return () => document.removeEventListener("mousedown", fuera);
+  }, [open]);
+
+  const q = query.trim().toLowerCase();
+  const filtrados = q
+    ? bancos.filter((b) => b.toLowerCase().includes(q))
+    : bancos;
+
+  const elegir = (nombre: string) => {
+    onChange(nombre);
+    setQuery(nombre);
+    setOpen(false);
+  };
+
+  return (
+    <div ref={ref} className="relative mt-1">
+      <input
+        type="text"
+        value={query}
+        onChange={(e) => {
+          setQuery(e.target.value);
+          onChange(e.target.value);
+          setOpen(true);
+          setCursor(0);
+        }}
+        onFocus={() => setOpen(true)}
+        onKeyDown={(e) => {
+          if (!open) {
+            if (e.key === "ArrowDown" || e.key === "Enter") {
+              setOpen(true);
+              e.preventDefault();
+            }
+            return;
+          }
+          if (e.key === "ArrowDown") {
+            setCursor((c) => Math.min(c + 1, filtrados.length - 1));
+            e.preventDefault();
+          } else if (e.key === "ArrowUp") {
+            setCursor((c) => Math.max(c - 1, 0));
+            e.preventDefault();
+          } else if (e.key === "Enter") {
+            if (filtrados[cursor]) {
+              elegir(filtrados[cursor]);
+              e.preventDefault();
+            }
+          } else if (e.key === "Escape") {
+            setOpen(false);
+          }
+        }}
+        placeholder={placeholder ?? "Buscá el banco…"}
+        className="w-full rounded-xl border border-slate-200 bg-white px-3.5 py-2.5 text-sm text-slate-900 placeholder:text-slate-400 shadow-sm focus:border-[#4FAEB2] focus:outline-none focus:ring-2 focus:ring-[#4FAEB2]/20"
+      />
+      {open ? (
+        <div className="absolute left-0 right-0 top-full z-30 mt-1 max-h-64 overflow-y-auto rounded-xl border border-slate-200 bg-white shadow-lg">
+          {filtrados.length === 0 ? (
+            <div className="px-3 py-2.5 text-xs text-slate-400">
+              Sin resultados. Podés dejar el nombre tipeado como banco libre.
+            </div>
+          ) : (
+            filtrados.map((nombre, i) => (
+              <button
+                key={nombre}
+                type="button"
+                onMouseDown={(e) => {
+                  e.preventDefault();
+                  elegir(nombre);
+                }}
+                onMouseEnter={() => setCursor(i)}
+                className={`block w-full px-3 py-2 text-left text-sm ${
+                  i === cursor ? "bg-[#4FAEB2]/10 text-[#3F8E91]" : "text-slate-700 hover:bg-slate-50"
+                }`}
+              >
+                {nombre}
+              </button>
+            ))
+          )}
+        </div>
+      ) : null}
     </div>
   );
 }
