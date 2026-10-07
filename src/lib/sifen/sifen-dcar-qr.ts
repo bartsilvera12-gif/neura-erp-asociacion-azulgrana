@@ -107,9 +107,11 @@ export function buildSifenDcarQrUrl(signedXmlUtf8: string, opts: BuildSifenDcarQ
   qr += `cItems=${cItems}&`;
   qr += `DigestValue=${digestHexUtf8}&`;
 
+  // Azulgrana: SET les asigno IdCSC=0002 en produccion (no el 0001 por defecto).
+  // Si cualquier otro tenant necesita algo distinto, meter opts.idCsc explicito.
   const idCsc =
     opts.idCsc?.trim() ||
-    (opts.ambiente === "test" ? SIFEN_TEST_ID_CSC : "0001");
+    (opts.ambiente === "test" ? SIFEN_TEST_ID_CSC : "0002");
   qr += `IdCSC=${idCsc}`;
 
   const cHashQR = createHash("sha256").update(qr + opts.csc, "utf8").digest("hex");
