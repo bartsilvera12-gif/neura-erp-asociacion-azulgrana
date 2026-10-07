@@ -122,6 +122,10 @@ export async function GET(
     }
 
     const feDto = feOut ? toFacturaElectronicaDto(feOut as Record<string, unknown>) : null;
+    const setEstado =
+      feOut != null
+        ? ((feOut as Record<string, unknown>).set_cancelacion_estado as string | null | undefined) ?? null
+        : null;
     const cancelacion =
       feDto != null
         ? buildSifenCancelacionPreview({
@@ -131,6 +135,7 @@ export async function GET(
             plazoHoras: sifen_plazo_cancelacion_horas,
             pagosCount,
             nowMs: Date.now(),
+            setCancelacionEstado: setEstado,
           })
         : null;
 

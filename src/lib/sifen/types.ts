@@ -178,6 +178,12 @@ export interface SifenCancelacionPreviewDTO {
   requiere_nota_credito: boolean;
   tiene_pagos: boolean;
   plazo_horas: number;
+  /** Estado del envio del Evento de Cancelacion a SET (null | enviado | aprobado | rechazado). */
+  set_cancelacion_estado: string | null;
+  /** True si se puede intentar enviar el Evento a SET ahora. */
+  puede_cancelar_set: boolean;
+  /** True si el plazo de cancelacion SET ya expiró (requiere Nota de Credito). */
+  plazo_set_expirado: boolean;
 }
 
 /** Detalle JSON del evento de generación de borrador vía API. */

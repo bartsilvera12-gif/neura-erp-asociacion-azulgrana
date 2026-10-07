@@ -11,6 +11,8 @@ export type SifenCancelacionContext = {
   pagosCount: number;
   /** Instantánea de referencia (servidor); tests pueden fijarla. */
   nowMs: number;
+  /** Estado del envio del Evento de Cancelacion a SET (null | enviado | aprobado | rechazado). */
+  setCancelacionEstado?: string | null;
 };
 
 export type SifenCancelacionPreview = {
@@ -21,6 +23,14 @@ export type SifenCancelacionPreview = {
   requiere_nota_credito: boolean;
   tiene_pagos: boolean;
   plazo_horas: number;
+  /** True si se puede intentar el envio del Evento de Cancelacion a SET
+   *  (DE aprobado o pseudo-cancelado en ERP, dentro de las 48h, sin
+   *  cancelacion SET previamente aprobada). */
+  puede_cancelar_set: boolean;
+  /** Estado del envio SET (null si nunca se intento). */
+  set_cancelacion_estado: string | null;
+  /** True si el plazo SET ya expiró y hay que ir por Nota de Credito. */
+  plazo_set_expirado: boolean;
 };
 
 function parseMs(iso: string | null): number | null {
@@ -43,15 +53,40 @@ export function buildSifenCancelacionPreview(ctx: SifenCancelacionContext): Sife
   const estado = ctx.estadoSifen == null ? "" : String(ctx.estadoSifen).trim();
   const plazo_horas = normalizePlazoCancelacionHoras(ctx.plazoHoras);
   const tiene_pagos = ctx.pagosCount > 0;
+  const setEstado = (ctx.setCancelacionEstado ?? "").trim() || null;
+  const aprobadoMs = parseMs(ctx.sifenAprobadoAtIso);
+
+  // Flags derivados comunes
+  const limiteMs = aprobadoMs != null ? aprobadoMs + plazo_horas * 60 * 60 * 1000 : null;
+  const cancelable_hasta = limiteMs != null ? new Date(limiteMs).toISOString() : null;
+  const dentroPlazo = limiteMs != null && ctx.nowMs <= limiteMs;
+  const plazo_set_expirado = limiteMs != null && ctx.nowMs > limiteMs;
+
+  // `puede_cancelar_set`: podemos intentar enviar el Evento a SET si
+  //   - el DE fue aprobado por SET (hay aprobado_at)
+  //   - estado 'aprobado' o 'cancelado' en ERP (la pseudo-cancelacion no bloquea)
+  //   - aun dentro del plazo
+  //   - no se aprobó una cancelacion SET antes
+  const puede_cancelar_set =
+    aprobadoMs != null &&
+    (estado === "aprobado" || estado === "cancelado") &&
+    dentroPlazo &&
+    setEstado !== "aprobado";
 
   if (estado === "cancelado" || ctx.sifenCanceladoAtIso) {
     return {
       puede_cancelar: false,
-      cancelable_hasta: null,
-      motivo_bloqueo: "El documento electrónico ya fue cancelado en el ERP.",
-      requiere_nota_credito: false,
+      cancelable_hasta,
+      motivo_bloqueo:
+        setEstado === "aprobado"
+          ? "El documento ya fue cancelado en SET."
+          : "El documento electrónico ya fue cancelado en el ERP.",
+      requiere_nota_credito: plazo_set_expirado && setEstado !== "aprobado",
       tiene_pagos,
       plazo_horas,
+      puede_cancelar_set,
+      set_cancelacion_estado: setEstado,
+      plazo_set_expirado,
     };
   }
 
@@ -63,10 +98,12 @@ export function buildSifenCancelacionPreview(ctx: SifenCancelacionContext): Sife
       requiere_nota_credito: false,
       tiene_pagos,
       plazo_horas,
+      puede_cancelar_set: false,
+      set_cancelacion_estado: setEstado,
+      plazo_set_expirado: false,
     };
   }
 
-  const aprobadoMs = parseMs(ctx.sifenAprobadoAtIso);
   if (aprobadoMs == null) {
     return {
       puede_cancelar: false,
@@ -76,11 +113,11 @@ export function buildSifenCancelacionPreview(ctx: SifenCancelacionContext): Sife
       requiere_nota_credito: true,
       tiene_pagos,
       plazo_horas,
+      puede_cancelar_set: false,
+      set_cancelacion_estado: setEstado,
+      plazo_set_expirado: false,
     };
   }
-
-  const limiteMs = aprobadoMs + plazo_horas * 60 * 60 * 1000;
-  const cancelable_hasta = new Date(limiteMs).toISOString();
 
   if (tiene_pagos) {
     return {
@@ -90,10 +127,13 @@ export function buildSifenCancelacionPreview(ctx: SifenCancelacionContext): Sife
       requiere_nota_credito: true,
       tiene_pagos,
       plazo_horas,
+      puede_cancelar_set,
+      set_cancelacion_estado: setEstado,
+      plazo_set_expirado,
     };
   }
 
-  if (ctx.nowMs > limiteMs) {
+  if (plazo_set_expirado) {
     return {
       puede_cancelar: false,
       cancelable_hasta,
@@ -101,6 +141,9 @@ export function buildSifenCancelacionPreview(ctx: SifenCancelacionContext): Sife
       requiere_nota_credito: true,
       tiene_pagos,
       plazo_horas,
+      puede_cancelar_set: false,
+      set_cancelacion_estado: setEstado,
+      plazo_set_expirado: true,
     };
   }
 
@@ -111,5 +154,8 @@ export function buildSifenCancelacionPreview(ctx: SifenCancelacionContext): Sife
     requiere_nota_credito: false,
     tiene_pagos,
     plazo_horas,
+    puede_cancelar_set,
+    set_cancelacion_estado: setEstado,
+    plazo_set_expirado: false,
   };
 }

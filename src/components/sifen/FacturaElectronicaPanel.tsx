@@ -187,7 +187,7 @@ export function FacturaElectronicaPanel({
     | null
   >(null);
   const [flash, setFlash] = useState<{ kind: "ok" | "err"; text: string } | null>(null);
-  const [cancelModal, setCancelModal] = useState<"cancelar" | "reemitir" | null>(null);
+  const [cancelModal, setCancelModal] = useState<"cancelar" | "reemitir" | "cancelar_set" | null>(null);
   const [motivoCancel, setMotivoCancel] = useState("");
 
   const refresh = useCallback(async (): Promise<Resumen | null> => {
@@ -234,6 +234,47 @@ export function FacturaElectronicaPanel({
       if (reemitirTrasOk && clienteId.trim()) {
         router.push(`/clientes/${encodeURIComponent(clienteId.trim())}`);
       }
+    } catch (e) {
+      setFlash({ kind: "err", text: e instanceof Error ? e.message : "Error de red" });
+    } finally {
+      setAction(null);
+    }
+  };
+
+  const ejecutarCancelacionSet = async () => {
+    setFlash(null);
+    const m = motivoCancel.trim();
+    if (m.length < 5) {
+      setFlash({ kind: "err", text: "Indicá un motivo de al menos 5 caracteres." });
+      return;
+    }
+    setAction("cancelar-de");
+    try {
+      const res = await fetchWithSupabaseSession(`/api/facturas/${facturaId}/sifen/cancelar-set`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ motivo: m }),
+      });
+      const j = (await res.json()) as {
+        success?: boolean;
+        error?: string;
+        data?: { aprobado?: boolean; d_msg_res_eve?: string; set_cancelacion_estado?: string };
+      };
+      if (!res.ok || !j.success) {
+        setFlash({ kind: "err", text: j.error ?? `Error ${res.status}` });
+        return;
+      }
+      const ok = j.data?.aprobado === true;
+      setFlash({
+        kind: ok ? "ok" : "err",
+        text: ok
+          ? "Cancelación aprobada por SET. La factura quedó anulada también a nivel fiscal."
+          : `SET rechazó la cancelación: ${j.data?.d_msg_res_eve ?? "sin detalle"}. Si pasaron las 48 h, usá Nota de Crédito.`,
+      });
+      setCancelModal(null);
+      setMotivoCancel("");
+      await refresh();
+      await onComercialUpdated?.();
     } catch (e) {
       setFlash({ kind: "err", text: e instanceof Error ? e.message : "Error de red" });
     } finally {
@@ -740,7 +781,7 @@ export function FacturaElectronicaPanel({
                       }}
                       className="px-3 py-2 text-xs font-semibold rounded-lg bg-rose-700 text-white disabled:opacity-40 disabled:cursor-not-allowed hover:bg-rose-800"
                     >
-                      Cancelar factura (DE)
+                      Cancelar (ERP)
                     </button>
                     <button
                       type="button"
@@ -755,6 +796,66 @@ export function FacturaElectronicaPanel({
                     </button>
                   </>
                 ) : null}
+                {resumen.cancelacion && resumen.cancelacion.puede_cancelar_set ? (
+                  <button
+                    type="button"
+                    disabled={action !== null}
+                    onClick={() => {
+                      setMotivoCancel("");
+                      setCancelModal("cancelar_set");
+                    }}
+                    className="px-3 py-2 text-xs font-semibold rounded-lg bg-rose-900 text-white disabled:opacity-40 disabled:cursor-not-allowed hover:bg-rose-950"
+                    title="Envía el Evento de Cancelación a SET. Ventana oficial 48 h desde aprobación."
+                  >
+                    Cancelar en SET
+                  </button>
+                ) : null}
+              </div>
+            )}
+            {fe && estado === "cancelado" && resumen.cancelacion && resumen.cancelacion.puede_cancelar_set && (
+              <div className="flex flex-wrap items-center gap-2 pt-2">
+                <span className="text-[11px] text-slate-500">
+                  La cancelación en el ERP no bajó a SET. Todavía estás en la ventana de 48 h.
+                </span>
+                <button
+                  type="button"
+                  disabled={action !== null}
+                  onClick={() => {
+                    setMotivoCancel("");
+                    setCancelModal("cancelar_set");
+                  }}
+                  className="px-3 py-2 text-xs font-semibold rounded-lg bg-rose-900 text-white disabled:opacity-40 disabled:cursor-not-allowed hover:bg-rose-950"
+                  title="Envía el Evento de Cancelación a SET"
+                >
+                  Cancelar en SET
+                </button>
+              </div>
+            )}
+            {fe && resumen.cancelacion && resumen.cancelacion.plazo_set_expirado && resumen.cancelacion.set_cancelacion_estado !== "aprobado" && (
+              <div className="flex flex-wrap items-center gap-2 pt-2 rounded-lg bg-amber-50 border border-amber-200 px-3 py-2">
+                <span className="text-[11px] text-amber-900">
+                  Pasaron las 48 h desde la aprobación SET — la cancelación oficial ya no es posible.
+                  Emití una <b>Nota de Crédito</b> para anular el efecto fiscal.
+                </span>
+                <a
+                  href={`/clientes/${encodeURIComponent(clienteId)}?nc=${encodeURIComponent(facturaId)}`}
+                  className="ml-auto px-3 py-1.5 text-xs font-semibold rounded-lg bg-amber-600 text-white hover:bg-amber-700"
+                >
+                  Emitir Nota de Crédito
+                </a>
+              </div>
+            )}
+            {fe && resumen.cancelacion && resumen.cancelacion.set_cancelacion_estado && (
+              <div
+                className={`mt-2 text-[11px] rounded-md px-2 py-1 border ${
+                  resumen.cancelacion.set_cancelacion_estado === "aprobado"
+                    ? "bg-emerald-50 border-emerald-200 text-emerald-800"
+                    : resumen.cancelacion.set_cancelacion_estado === "rechazado"
+                    ? "bg-rose-50 border-rose-200 text-rose-800"
+                    : "bg-slate-50 border-slate-200 text-slate-700"
+                }`}
+              >
+                Cancelación en SET: <b>{resumen.cancelacion.set_cancelacion_estado}</b>
               </div>
             )}
             {fe && (
@@ -930,14 +1031,30 @@ export function FacturaElectronicaPanel({
         >
           <div className="bg-white rounded-xl shadow-xl max-w-md w-full p-5 space-y-4 border border-slate-200">
             <h4 id="sifen-cancel-title" className="text-sm font-bold text-slate-900">
-              {cancelModal === "reemitir"
-                ? "Cancelar documento y continuar en cliente"
-                : "Cancelar documento electrónico (ERP)"}
+              {cancelModal === "cancelar_set"
+                ? "Cancelar en SET (envío oficial)"
+                : cancelModal === "reemitir"
+                  ? "Cancelar documento y continuar en cliente"
+                  : "Cancelar documento electrónico (ERP)"}
             </h4>
             <p className="text-xs text-slate-600 leading-relaxed">
-              Se registrará la cancelación lógica del DE, la factura comercial pasará a{" "}
-              <span className="font-semibold">Anulado</span> y quedará trazabilidad. No se elimina ningún registro.
-              {cancelModal === "reemitir" ? " Luego podés emitir una nueva factura desde la ficha del cliente." : ""}
+              {cancelModal === "cancelar_set" ? (
+                <>
+                  Se enviará el <b>Evento de Cancelación</b> a SET. Si SET lo aprueba
+                  (código <code>0601</code>), la factura queda anulada también a nivel
+                  fiscal y aparece como cancelada en el libro de ventas electrónicas.
+                  Plazo oficial: 48 h desde aprobación.
+                </>
+              ) : (
+                <>
+                  Se registrará la cancelación lógica del DE, la factura comercial pasará
+                  a <span className="font-semibold">Anulado</span> y quedará trazabilidad.
+                  No se elimina ningún registro.
+                  {cancelModal === "reemitir"
+                    ? " Luego podés emitir una nueva factura desde la ficha del cliente."
+                    : ""}
+                </>
+              )}
             </p>
             <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wide">
               Motivo (obligatorio)
@@ -964,10 +1081,20 @@ export function FacturaElectronicaPanel({
               <button
                 type="button"
                 disabled={action !== null}
-                onClick={() => void ejecutarCancelacion(cancelModal === "reemitir")}
-                className="px-3 py-2 text-xs font-semibold rounded-lg bg-rose-700 text-white hover:bg-rose-800 disabled:opacity-50"
+                onClick={() =>
+                  cancelModal === "cancelar_set"
+                    ? void ejecutarCancelacionSet()
+                    : void ejecutarCancelacion(cancelModal === "reemitir")
+                }
+                className={`px-3 py-2 text-xs font-semibold rounded-lg text-white disabled:opacity-50 ${
+                  cancelModal === "cancelar_set" ? "bg-rose-900 hover:bg-rose-950" : "bg-rose-700 hover:bg-rose-800"
+                }`}
               >
-                {action === "cancelar-de" ? "Procesando…" : "Confirmar cancelación"}
+                {action === "cancelar-de"
+                  ? "Procesando…"
+                  : cancelModal === "cancelar_set"
+                    ? "Enviar a SET"
+                    : "Confirmar cancelación"}
               </button>
             </div>
           </div>
