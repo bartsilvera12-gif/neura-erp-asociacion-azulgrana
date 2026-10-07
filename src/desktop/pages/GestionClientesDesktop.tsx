@@ -12,7 +12,6 @@ import {
 } from "lucide-react";
 import { ModalCambioPlanGestion } from "@/components/gestion-clientes/ModalCambioPlanGestion";
 import { ModalHistorialClienteGestion } from "@/components/gestion-clientes/ModalHistorialClienteGestion";
-import { ProyectosClienteGestion } from "@/components/gestion-clientes/ProyectosClienteGestion";
 import { RegistrarPagoModal } from "@/components/pagos/RegistrarPagoModal";
 import FacturarVentaModal from "@/components/facturacion/FacturarVentaModal";
 import { SifenEstadoBadge } from "@/components/sifen/SifenEstadoBadge";
@@ -1115,8 +1114,6 @@ function GestionClientesPageInner() {
                   />
                 </div>
               </section>
-
-              <ProyectosClienteGestion key={selected.id} clienteId={selected.id} />
 
               <section>
                 <button
