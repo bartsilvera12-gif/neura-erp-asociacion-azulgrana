@@ -571,7 +571,13 @@ export function FacturaElectronicaPanel({
   const mostrarErrorPersistido =
     Boolean(fe?.error?.trim()) && (estado === "error_envio" || estado === "rechazado");
 
-  const deAprobado = Boolean(fe && String(estado) === "aprobado");
+  // deAprobado = la factura FUE aprobada por SET en algun momento. Esto cubre:
+  //   - estado_sifen === "aprobado" (caso normal)
+  //   - estado_sifen === "cancelado" PERO con sifen_aprobado_at (anulada en ERP
+  //     pero DE sigue vigente en SET — necesita NC para anularse en SET)
+  const deAprobado = Boolean(
+    fe && (String(estado) === "aprobado" || (String(estado) === "cancelado" && fe.sifen_aprobado_at))
+  );
 
   const stStr = estado != null ? String(estado) : "";
   const primaryConsultarLote =

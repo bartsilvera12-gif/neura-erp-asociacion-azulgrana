@@ -28,19 +28,14 @@ export async function evaluateNotaCreditoCreationGate(
   }
 
   const estado = String((factura as { estado?: string }).estado ?? "");
-  if (estado === "Anulado") {
-    return { puede_crear: false, motivo_bloqueo: "La factura está anulada." };
-  }
 
-  const saldo = num((factura as { saldo?: unknown }).saldo);
-  const monto = num((factura as { monto?: unknown }).monto);
-  if (saldo <= 0) {
-    return { puede_crear: false, motivo_bloqueo: "No hay saldo pendiente en la factura." };
-  }
-
+  // Caso NC-fiscal: la factura puede estar "Anulado" en el ERP (cancelacion
+  // interna) pero el DE sigue vigente en SET — ahi SI corresponde emitir NC
+  // para anular el efecto fiscal. Lo detectamos por sifen_aprobado_at
+  // presente y set_cancelacion_estado != 'aprobado' (SET no cancelo el DE).
   const { data: feRow, error: errFe } = await supabase
     .from("factura_electronica")
-    .select("id, factura_id, estado_sifen, sifen_aprobado_at, sifen_cancelado_at, cdc, xml_firmado_path")
+    .select("id, factura_id, estado_sifen, sifen_aprobado_at, sifen_cancelado_at, cdc, xml_firmado_path, set_cancelacion_estado")
     .eq("factura_id", facturaId)
     .eq("empresa_id", empresaId)
     .maybeSingle();
@@ -53,7 +48,22 @@ export async function evaluateNotaCreditoCreationGate(
   }
 
   const estadoSifen = String((feRow as { estado_sifen?: string }).estado_sifen ?? "");
-  if (estadoSifen !== "aprobado") {
+  const setCancEstado = String((feRow as { set_cancelacion_estado?: string }).set_cancelacion_estado ?? "");
+  const aprobadoAt = (feRow as { sifen_aprobado_at?: string | null }).sifen_aprobado_at;
+  const deSiguieVigenteEnSet =
+    aprobadoAt && estadoSifen === "cancelado" && setCancEstado !== "aprobado";
+
+  if (estado === "Anulado" && !deSiguieVigenteEnSet) {
+    return { puede_crear: false, motivo_bloqueo: "La factura está anulada." };
+  }
+
+  const saldo = num((factura as { saldo?: unknown }).saldo);
+  const monto = num((factura as { monto?: unknown }).monto);
+  if (saldo <= 0 && !deSiguieVigenteEnSet) {
+    return { puede_crear: false, motivo_bloqueo: "No hay saldo pendiente en la factura." };
+  }
+
+  if (estadoSifen !== "aprobado" && !deSiguieVigenteEnSet) {
     return {
       puede_crear: false,
       motivo_bloqueo: "El documento electrónico debe estar aprobado por SET para crear una nota de crédito.",

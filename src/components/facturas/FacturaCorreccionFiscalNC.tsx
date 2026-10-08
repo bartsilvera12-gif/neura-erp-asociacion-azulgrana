@@ -398,7 +398,10 @@ export function FacturaCorreccionFiscalNC({
         </div>
       )}
 
-      {!puedeCancelarDe && deAprobado && estado !== "Anulado" && puedeCrear ? (
+      {/* Permitimos crear NC incluso si la factura comercial esta "Anulado"
+          (cancelada en ERP) — en ese caso el DE sigue vigente en SET y la NC
+          es el camino legal para anular tambien a nivel fiscal. */}
+      {!puedeCancelarDe && deAprobado && puedeCrear ? (
         <div className="space-y-2">
           <button
             type="button"
