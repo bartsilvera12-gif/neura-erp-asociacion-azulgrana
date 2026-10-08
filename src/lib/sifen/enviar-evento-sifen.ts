@@ -13,7 +13,11 @@ import { extractKeyAndCertFromP12, type P12KeyMaterial } from "./sign-xml";
 import { urlRecepEvento } from "./sifen-ws-urls";
 import { SIFEN_EKUATIA_TARGET_NS } from "./sifen-xsi-schema-location";
 
-const SOAP_ENV = "http://www.w3.org/2003/05/soap-envelope";
+// IMPORTANTE: el endpoint de eventos de SIFEN (/de/ws/eventos/evento.wsdl)
+// solo acepta SOAP 1.1 (http://schemas.xmlsoap.org/soap/envelope/), no 1.2.
+// Los endpoints de DE (recibe-lote, recibe sync) si aceptan SOAP 1.2, pero
+// eventos no. Confirmado comparando con facturacionelectronicapy-setjs.
+const SOAP_ENV_11 = "http://schemas.xmlsoap.org/soap/envelope/";
 const SIFEN_NS = SIFEN_EKUATIA_TARGET_NS;
 
 export interface EnviarEventoSifenParams {
@@ -78,19 +82,20 @@ function generarDId(): number {
  */
 function construirSoapRecibeEvento(dId: number, xmlEventoFirmado: string): string {
   const inner = stripXmlDecl(xmlEventoFirmado);
+  // SOAP 1.1: prefijo "soap:", namespace schemas.xmlsoap.org, sin <soap:Header/>
+  // vacio (algunos handlers lo rechazan).
   return (
     `<?xml version="1.0" encoding="UTF-8"?>` +
-    `<env:Envelope xmlns:env="${SOAP_ENV}">` +
-    `<env:Header/>` +
-    `<env:Body>` +
+    `<soap:Envelope xmlns:soap="${SOAP_ENV_11}">` +
+    `<soap:Body>` +
     `<rEnvioEvento xmlns="${SIFEN_NS}">` +
     `<dId>${dId}</dId>` +
     `<dEvReg>` +
     inner +
     `</dEvReg>` +
     `</rEnvioEvento>` +
-    `</env:Body>` +
-    `</env:Envelope>`
+    `</soap:Body>` +
+    `</soap:Envelope>`
   );
 }
 
@@ -127,6 +132,8 @@ function postHttpsMtls(
         headers: {
           "Content-Type": contentType,
           "Content-Length": Buffer.byteLength(body, "utf8"),
+          // SOAP 1.1 requiere SOAPAction. SET usa string vacio como accion generica.
+          SOAPAction: '""',
         },
       },
       (res) => {
@@ -157,13 +164,8 @@ export async function enviarEventoSifen(
   const url = urlRecepEvento(ambiente);
   const dId = params.dId ?? generarDId();
   const soapBody = construirSoapRecibeEvento(dId, params.xmlEventoFirmado);
-  // SOAP 1.2: SET defaulta al procesador de DE cuando no viene `action` en el
-  // Content-Type. Para que route al procesador de eventos (siRecepEvento_V150)
-  // hay que especificarlo explicitamente, si no responde con rRetEnviDe +
-  // "XML Mal Formado" (porque interpreta rEnvioEvento como un rEnvioDe mal
-  // armado).
-  const contentType =
-    'application/soap+xml; charset=utf-8; action="siRecepEvento"';
+  // SOAP 1.1: Content-Type text/xml + header SOAPAction obligatorio.
+  const contentType = "text/xml; charset=utf-8";
 
   const material: P12KeyMaterial = extractKeyAndCertFromP12(
     params.empresaConfig.certificadoP12,
