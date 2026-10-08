@@ -234,12 +234,13 @@ async function handleCancelarSetPostInner(
   // Buscamos los campos SIFEN recursivamente por nombre, ignorando el prefijo
   // de namespace (puede ser ns2:, ns3:, o default). Funciona tanto si setResp
   // viene como objeto parseado como si setRespStr viene como JSON string.
+  // Busca un elemento por su nombre (ignorando prefijo de namespace) y devuelve
+  // su valor textual. Devuelve null si el nombre no aparece en el arbol — a
+  // diferencia de la version buggeada anterior que devolvia cualquier string
+  // leaf aunque no matchee el nombre.
   const findInTree = (node: unknown, name: string, depth = 0): string | null => {
-    if (depth > 20) return null; // guard contra circulares
+    if (depth > 30) return null;
     if (node == null) return null;
-    if (typeof node === "string" || typeof node === "number") {
-      return String(node);
-    }
     if (Array.isArray(node)) {
       for (const el of node) {
         const r = findInTree(el, name, depth + 1);
@@ -247,25 +248,27 @@ async function handleCancelarSetPostInner(
       }
       return null;
     }
-    if (typeof node === "object") {
-      const o = node as Record<string, unknown>;
-      for (const k of Object.keys(o)) {
-        const bare = k.replace(/^[^:]+:/, "");
-        if (bare === name) {
-          const v = o[k];
-          if (typeof v === "string" || typeof v === "number") return String(v);
-          if (v && typeof v === "object" && "_" in (v as Record<string, unknown>)) {
-            const under = (v as Record<string, unknown>)._;
-            if (typeof under === "string" || typeof under === "number") return String(under);
-          }
-          const nested = findInTree(v, name, depth + 1);
-          if (nested != null) return nested;
+    if (typeof node !== "object") return null;
+    const o = node as Record<string, unknown>;
+    // Primera pasada: match directo por nombre
+    for (const k of Object.keys(o)) {
+      // ignorar el bloque "$" (atributos del elemento, xml2js) y "_" (texto)
+      if (k === "$") continue;
+      const bare = k.replace(/^[^:]+:/, "");
+      if (bare === name) {
+        const v = o[k];
+        if (typeof v === "string" || typeof v === "number") return String(v);
+        if (v && typeof v === "object") {
+          const under = (v as Record<string, unknown>)._;
+          if (typeof under === "string" || typeof under === "number") return String(under);
         }
       }
-      for (const k of Object.keys(o)) {
-        const r = findInTree(o[k], name, depth + 1);
-        if (r != null) return r;
-      }
+    }
+    // Segunda pasada: recurse en los hijos
+    for (const k of Object.keys(o)) {
+      if (k === "$") continue;
+      const r = findInTree(o[k], name, depth + 1);
+      if (r != null) return r;
     }
     return null;
   };
