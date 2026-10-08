@@ -74,20 +74,21 @@ export function buildCancelacionEventXml(opts: BuildCancelacionEventXmlOptions):
   // El Id del rEve debe ser el mismo dSecMsg para que la firma pueda referenciarlo.
   const rEveId = dSecMsg;
 
+  // IMPORTANTE: NO envolver con <rGesEve>. SET.js y otras libs en produccion en
+  // Paraguay firman el <rEve> directamente y lo meten en el <dEvReg> del SOAP.
+  // Agregar <rGesEve> hace que SET devuelva "XML Mal Formado" (0160).
   const xml =
     `<?xml version="1.0" encoding="UTF-8"?>` +
-    `<rGesEve xmlns="${SIFEN_EKUATIA_TARGET_NS}">` +
-      `<rEve Id="${escapeXml(rEveId)}">` +
-        `<dFecFirma>${escapeXml(dFecFirma)}</dFecFirma>` +
-        `<dVerFor>150</dVerFor>` +
-        `<gGroupTiEvt>` +
-          `<rGeVeCan>` +
-            `<Id>${escapeXml(cdc)}</Id>` +
-            `<mOtEve>${escapeXml(motivo)}</mOtEve>` +
-          `</rGeVeCan>` +
-        `</gGroupTiEvt>` +
-      `</rEve>` +
-    `</rGesEve>`;
+    `<rEve xmlns="${SIFEN_EKUATIA_TARGET_NS}" Id="${escapeXml(rEveId)}">` +
+      `<dFecFirma>${escapeXml(dFecFirma)}</dFecFirma>` +
+      `<dVerFor>150</dVerFor>` +
+      `<gGroupTiEvt>` +
+        `<rGeVeCan>` +
+          `<Id>${escapeXml(cdc)}</Id>` +
+          `<mOtEve>${escapeXml(motivo)}</mOtEve>` +
+        `</rGeVeCan>` +
+      `</gGroupTiEvt>` +
+    `</rEve>`;
 
   return { xml, rEveId };
 }
