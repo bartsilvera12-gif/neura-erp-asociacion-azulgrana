@@ -138,6 +138,7 @@ export async function handleCancelarSetPost(
   let xmlEvento = "";
   let xmlFirmado = "";
   let setRespStr = "";
+  let setRespParsed: unknown = null;
   try {
     // 5. Generar XML del evento
     const paramsXmlgen = {
@@ -164,7 +165,8 @@ export async function handleCancelarSetPost(
       debug: true,
       timeout: 60000,
     });
-    setRespStr = typeof setResp === "string" ? setResp : JSON.stringify(setResp);
+    setRespParsed = setResp;
+    setRespStr = typeof setResp === "string" ? setResp : JSON.stringify(setResp, null, 2);
   } catch (e) {
     await fs.rm(tmpDir, { recursive: true, force: true }).catch(() => {});
     const m = e instanceof Error ? e.message : String(e);
@@ -172,18 +174,51 @@ export async function handleCancelarSetPost(
   }
   await fs.rm(tmpDir, { recursive: true, force: true }).catch(() => {});
 
-  // 8. Parsear respuesta — buscar codigo del evento
-  const extract = (tag: string): string | null => {
-    const re = new RegExp(`<(?:[^\\s/>:]+:)?${tag}\\b[^>]*>([\\s\\S]*?)</(?:[^\\s/>:]+:)?${tag}\\b[^>]*>`, "i");
-    const m = setRespStr.match(re);
-    if (!m?.[1]) return null;
-    const inner = m[1].replace(/<[^>]+>/g, "").trim();
-    return inner.length > 0 ? inner : null;
+  // 8. Parsear respuesta — setApi.evento devuelve el env:Body parseado (objeto).
+  // Buscamos los campos SIFEN recursivamente por nombre, ignorando el prefijo
+  // de namespace (puede ser ns2:, ns3:, o default). Funciona tanto si setResp
+  // viene como objeto parseado como si setRespStr viene como JSON string.
+  const findInTree = (node: unknown, name: string): string | null => {
+    if (node == null) return null;
+    if (typeof node === "string" || typeof node === "number") {
+      return String(node);
+    }
+    if (Array.isArray(node)) {
+      for (const el of node) {
+        const r = findInTree(el, name);
+        if (r != null) return r;
+      }
+      return null;
+    }
+    if (typeof node === "object") {
+      const o = node as Record<string, unknown>;
+      for (const k of Object.keys(o)) {
+        // match sin importar prefijo (ns2:dCodRes, dCodRes, etc.)
+        const bare = k.replace(/^[^:]+:/, "");
+        if (bare === name) {
+          const v = o[k];
+          if (typeof v === "string" || typeof v === "number") return String(v);
+          // caso {_: "valor", $: {...}} de xml2js
+          if (v && typeof v === "object" && "_" in (v as Record<string, unknown>)) {
+            const under = (v as Record<string, unknown>)._;
+            if (typeof under === "string" || typeof under === "number") return String(under);
+          }
+          // seguir buscando dentro
+          const nested = findInTree(v, name);
+          if (nested != null) return nested;
+        }
+      }
+      for (const k of Object.keys(o)) {
+        const r = findInTree(o[k], name);
+        if (r != null) return r;
+      }
+    }
+    return null;
   };
-  const codEve = extract("dCodResEve") ?? "";
-  const codLote = extract("dCodRes") ?? "";
-  const msgEve = extract("dMsgResEve") ?? extract("dMsgRes") ?? "";
-  const protAut = extract("dProtAut") ?? null;
+  const codEve = (findInTree(setRespParsed, "dCodResEve") ?? findInTree(setRespParsed, "dCodRes") ?? "").trim();
+  const codLote = (findInTree(setRespParsed, "dCodRes") ?? "").trim();
+  const msgEve = (findInTree(setRespParsed, "dMsgResEve") ?? findInTree(setRespParsed, "dMsgRes") ?? "").trim();
+  const protAut = (findInTree(setRespParsed, "dProtAut") ?? "").trim() || null;
   const aprobado = codEve === "0601" || codLote === "0601";
   const loteRechazado = codLote !== "" && codLote !== "0300" && codLote !== "0601";
   const nuevoSetEstado: "enviado" | "aprobado" | "rechazado" = aprobado
