@@ -152,12 +152,18 @@ export async function handleCancelarSetPost(
     };
     xmlEvento = await xmlgen.generateXMLEventoCancelacion(dId, paramsXmlgen, { cdc, motivo });
 
-    // 6. Firmar
-    xmlFirmado = await xmlsign.signXML(xmlEvento, tmpP12, p12Password);
+    // 6. Firmar — IMPORTANTE:
+    //   - signXMLEvento firma el nodo <rEve>; signXML firmaría <DE> (equivocado).
+    //   - 4to param = true fuerza la impl en Node puro. El default es Java y
+    //     el container no tiene JDK → se cuelga esperando el proceso Java.
+    xmlFirmado = await xmlsign.signXMLEvento(xmlEvento, tmpP12, p12Password, true);
 
-    // 7. Enviar a SET
+    // 7. Enviar a SET con debug habilitado para que loguee el request
     const env = toSetEnv(ambiente);
-    const setResp = await setApi.evento(dId, xmlFirmado, env, tmpP12, p12Password);
+    const setResp = await setApi.evento(dId, xmlFirmado, env, tmpP12, p12Password, {
+      debug: true,
+      timeout: 60000,
+    });
     setRespStr = typeof setResp === "string" ? setResp : JSON.stringify(setResp);
   } catch (e) {
     await fs.rm(tmpDir, { recursive: true, force: true }).catch(() => {});
