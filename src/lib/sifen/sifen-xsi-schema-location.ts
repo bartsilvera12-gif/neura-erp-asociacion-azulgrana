@@ -10,6 +10,15 @@ export const SIFEN_SIRECEP_DE_V150_XSD_URL = "https://ekuatia.set.gov.py/sifen/x
 /** Nombre de archivo en `xsi:schemaLocation` (segundo token, relativo al catálogo SET). */
 export const SIFEN_SIRECEP_DE_V150_XSD_FILE = "siRecepDE_v150.xsd";
 
+/** Nombre de archivo del XSD de eventos SIFEN v150 (siRecepEvento_V150). */
+export const SIFEN_SIRECEP_EVENTO_V150_XSD_FILE = "siRecepEvento_v150.xsd";
+
 export function buildSifenSiRecepDeV150SchemaLocation(): string {
   return `${SIFEN_EKUATIA_TARGET_NS} ${SIFEN_SIRECEP_DE_V150_XSD_URL}`;
+}
+
+/** schemaLocation para el root del evento (<rGesEve>), igual al patron que
+ *  usa ensureRdeRootSchemaAttrs para los DE (ns + nombre de archivo relativo). */
+export function buildSifenSiRecepEventoV150SchemaLocation(): string {
+  return `${SIFEN_EKUATIA_TARGET_NS} ${SIFEN_SIRECEP_EVENTO_V150_XSD_FILE}`;
 }

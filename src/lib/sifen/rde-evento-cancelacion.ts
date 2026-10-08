@@ -14,8 +14,13 @@
  * ir por Nota de Credito.
  */
 
-import { SIFEN_EKUATIA_TARGET_NS } from "./sifen-xsi-schema-location";
+import {
+  SIFEN_EKUATIA_TARGET_NS,
+  buildSifenSiRecepEventoV150SchemaLocation,
+} from "./sifen-xsi-schema-location";
 import { escapeXml } from "./xml";
+
+const XMLNS_XSI = "http://www.w3.org/2001/XMLSchema-instance";
 
 export interface BuildCancelacionEventXmlOptions {
   /** CDC de 44 dígitos del DE que se quiere cancelar. */
@@ -74,21 +79,28 @@ export function buildCancelacionEventXml(opts: BuildCancelacionEventXmlOptions):
   // El Id del rEve debe ser el mismo dSecMsg para que la firma pueda referenciarlo.
   const rEveId = dSecMsg;
 
-  // IMPORTANTE: NO envolver con <rGesEve>. SET.js y otras libs en produccion en
-  // Paraguay firman el <rEve> directamente y lo meten en el <dEvReg> del SOAP.
-  // Agregar <rGesEve> hace que SET devuelva "XML Mal Formado" (0160).
+  // Estructura segun SIFEN Manual Tecnico v150, seccion Eventos + facturae-xmlgen
+  // (lib Paraguaya en produccion):
+  //   <rGesEve xmlns xmlns:xsi xsi:schemaLocation>  ← schemaLocation requerido por XSD
+  //     <rEve Id="X">...payload...</rEve>
+  //     <ds:Signature>...</ds:Signature>  ← HERMANO del rEve, dentro del rGesEve
+  //   </rGesEve>
+  const schemaLoc = buildSifenSiRecepEventoV150SchemaLocation();
   const xml =
     `<?xml version="1.0" encoding="UTF-8"?>` +
-    `<rEve xmlns="${SIFEN_EKUATIA_TARGET_NS}" Id="${escapeXml(rEveId)}">` +
-      `<dFecFirma>${escapeXml(dFecFirma)}</dFecFirma>` +
-      `<dVerFor>150</dVerFor>` +
-      `<gGroupTiEvt>` +
-        `<rGeVeCan>` +
-          `<Id>${escapeXml(cdc)}</Id>` +
-          `<mOtEve>${escapeXml(motivo)}</mOtEve>` +
-        `</rGeVeCan>` +
-      `</gGroupTiEvt>` +
-    `</rEve>`;
+    `<rGesEve xmlns="${SIFEN_EKUATIA_TARGET_NS}"` +
+      ` xmlns:xsi="${XMLNS_XSI}" xsi:schemaLocation="${escapeXml(schemaLoc)}">` +
+      `<rEve Id="${escapeXml(rEveId)}">` +
+        `<dFecFirma>${escapeXml(dFecFirma)}</dFecFirma>` +
+        `<dVerFor>150</dVerFor>` +
+        `<gGroupTiEvt>` +
+          `<rGeVeCan>` +
+            `<Id>${escapeXml(cdc)}</Id>` +
+            `<mOtEve>${escapeXml(motivo)}</mOtEve>` +
+          `</rGeVeCan>` +
+        `</gGroupTiEvt>` +
+      `</rEve>` +
+    `</rGesEve>`;
 
   return { xml, rEveId };
 }
