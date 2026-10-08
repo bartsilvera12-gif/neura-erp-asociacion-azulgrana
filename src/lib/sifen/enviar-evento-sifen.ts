@@ -157,7 +157,13 @@ export async function enviarEventoSifen(
   const url = urlRecepEvento(ambiente);
   const dId = params.dId ?? generarDId();
   const soapBody = construirSoapRecibeEvento(dId, params.xmlEventoFirmado);
-  const contentType = "application/xml; charset=utf-8";
+  // SOAP 1.2: SET defaulta al procesador de DE cuando no viene `action` en el
+  // Content-Type. Para que route al procesador de eventos (siRecepEvento_V150)
+  // hay que especificarlo explicitamente, si no responde con rRetEnviDe +
+  // "XML Mal Formado" (porque interpreta rEnvioEvento como un rEnvioDe mal
+  // armado).
+  const contentType =
+    'application/soap+xml; charset=utf-8; action="siRecepEvento"';
 
   const material: P12KeyMaterial = extractKeyAndCertFromP12(
     params.empresaConfig.certificadoP12,
