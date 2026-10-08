@@ -174,15 +174,18 @@ export async function createNotaCreditoBorrador(p: CreateNotaCreditoParams): Pro
     };
   }
 
-  const montoNc = saldo;
   const esperadoSaldo = Math.max(0, montoFactura - sumaPagos);
-  if (Math.abs(saldo - esperadoSaldo) > 0.02) {
+  // Si el DE sigue vigente en SET (anulada en ERP), el saldo esta en 0 pero
+  // la NC fiscal debe emitirse por el monto total original. Caso contrario,
+  // valida la consistencia saldo == monto - pagos.
+  if (Math.abs(saldo - esperadoSaldo) > 0.02 && !deSiguieVigenteEnSet) {
     return {
       ok: false,
       status: 409,
       error: `El saldo pendiente (${saldo}) no coincide con monto − pagos (${esperadoSaldo}). Revisá la factura antes de crear una nota de crédito.`,
     };
   }
+  const montoNc = deSiguieVigenteEnSet ? esperadoSaldo : saldo;
 
   const { data: existeAprobada } = await p.supabase
     .from("nota_credito")
