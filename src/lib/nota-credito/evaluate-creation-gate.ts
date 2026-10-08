@@ -50,8 +50,17 @@ export async function evaluateNotaCreditoCreationGate(
   const estadoSifen = String((feRow as { estado_sifen?: string }).estado_sifen ?? "");
   const setCancEstado = String((feRow as { set_cancelacion_estado?: string }).set_cancelacion_estado ?? "");
   const aprobadoAt = (feRow as { sifen_aprobado_at?: string | null }).sifen_aprobado_at;
-  const deSiguieVigenteEnSet =
-    aprobadoAt && estadoSifen === "cancelado" && setCancEstado !== "aprobado";
+  const deSiguieVigenteEnSet = Boolean(
+    aprobadoAt && estadoSifen === "cancelado" && setCancEstado !== "aprobado"
+  );
+  console.log("[NC-gate]", {
+    facturaId,
+    estadoSifen,
+    aprobadoAt,
+    setCancEstado,
+    deSiguieVigenteEnSet,
+    feRowKeys: Object.keys(feRow as object),
+  });
 
   if (estado === "Anulado" && !deSiguieVigenteEnSet) {
     return { puede_crear: false, motivo_bloqueo: "La factura está anulada." };
