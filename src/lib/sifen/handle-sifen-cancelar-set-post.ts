@@ -1,16 +1,15 @@
 /**
- * Orquestacion del envio del Evento de Cancelacion SIFEN a SET.
+ * Envio del Evento de Cancelacion a SET usando libs Paraguayas en produccion:
+ *   - facturacionelectronicapy-xmlgen → arma el XML del evento
+ *   - facturacionelectronicapy-xmlsign → firma con el .p12
+ *   - facturacionelectronicapy-setapi → envia por SOAP+mTLS al endpoint de eventos
  *
- * Flujo:
- *   1. Leer factura + factura_electronica (requiere estado 'aprobado' o 'cancelado')
- *   2. Validar que haya CDC
- *   3. Cargar empresa_sifen_config (p12, password, csc, ambiente, ruc, razon social)
- *   4. Incrementar sifen_evento_seq atomicamente para armar dSecMsg
- *   5. Construir XML del evento, firmarlo, enviarlo por SOAP a /de/ws/eventos/
- *   6. Guardar respuesta en factura_electronica.set_cancelacion_* y traza en
- *      factura_electronica_evento
- *   7. Si SET aprueba (dCodResEve=0601), estado_sifen pasa a 'cancelado' y
- *      set_cancelacion_estado = 'aprobado'
+ * Las 3 libs son del mismo autor (marcosjara, TIPS SA) y se usan en facturaSend
+ * y otros integradores PY. Replican la combinacion exacta de SOAP/XSD/firma
+ * que SET producción acepta — en vez de reinventarla a mano.
+ *
+ * Como las libs toman el .p12 como PATH (no Buffer), descargamos el certificado
+ * a un archivo temporal, usamos, borramos.
  */
 
 import { NextRequest, NextResponse } from "next/server";
@@ -20,15 +19,22 @@ import { getFacturasSupabaseFromAuth } from "@/lib/facturacion/facturas-service-
 import { decryptSecret } from "@/lib/sifen/security";
 import { downloadSifenCertificadoObject } from "@/lib/sifen/sifen-certificados-storage";
 import type { AmbienteSifen } from "@/lib/sifen/types";
-import { extractKeyAndCertFromP12 } from "@/lib/sifen/sign-xml";
-import { signSifenEventoXml } from "@/lib/sifen/sign-evento-xml";
-import { buildCancelacionEventXml } from "@/lib/sifen/rde-evento-cancelacion";
-import { enviarEventoSifen } from "@/lib/sifen/enviar-evento-sifen";
-import { splitRucParaXml } from "@/lib/sifen/sifen-cdc";
+import * as fs from "node:fs/promises";
+import * as path from "node:path";
+import * as os from "node:os";
+import * as crypto from "node:crypto";
+import xmlgen from "facturacionelectronicapy-xmlgen";
+import xmlsign from "facturacionelectronicapy-xmlsign";
+import setApi from "facturacionelectronicapy-setapi";
 
 function parseAmbiente(v: string): AmbienteSifen | null {
   if (v === "test" || v === "produccion") return v;
   return null;
+}
+
+/** Mapea "produccion" → "prod" (lo que esperan las libs TIPS). */
+function toSetEnv(a: AmbienteSifen): "test" | "prod" {
+  return a === "produccion" ? "prod" : "test";
 }
 
 export async function handleCancelarSetPost(
@@ -80,10 +86,10 @@ export async function handleCancelarSetPost(
     return NextResponse.json(errorResponse("La factura no tiene CDC válido."), { status: 400 });
   }
 
-  // 2. Config SIFEN (cert + emisor)
+  // 2. Config SIFEN
   const { data: cfg, error: cfgErr } = await supabase
     .from("empresa_sifen_config")
-    .select("ambiente, activo, certificado_path, certificado_password_encrypted, ruc, razon_social, sifen_evento_seq")
+    .select("ambiente, activo, certificado_path, certificado_password_encrypted, ruc, razon_social, timbrado_numero, sifen_evento_seq")
     .eq("empresa_id", auth.empresa_id)
     .maybeSingle();
   if (cfgErr) return NextResponse.json(errorResponse(cfgErr.message), { status: 400 });
@@ -96,7 +102,7 @@ export async function handleCancelarSetPost(
   const certPath = String(cfg.certificado_path ?? "").trim();
   const encPwd = String(cfg.certificado_password_encrypted ?? "").trim();
   if (!certPath || !encPwd) {
-    return NextResponse.json(errorResponse("Falta certificado P12 o su contraseña en la configuración SIFEN."), { status: 400 });
+    return NextResponse.json(errorResponse("Falta certificado P12 o su contraseña en configuración SIFEN."), { status: 400 });
   }
 
   let p12Password: string;
@@ -112,19 +118,7 @@ export async function handleCancelarSetPost(
     return NextResponse.json(errorResponse(`No se pudo descargar el .p12: ${p12Dl.message}`), { status: 500 });
   }
 
-  // 3. RUC + DV del emisor
-  const rucRaw = String(cfg.ruc ?? "").trim();
-  const nombreEmisor = String(cfg.razon_social ?? "").trim() || "Emisor";
-  let rucEmisor: string, dvEmisor: string;
-  try {
-    const { cuerpo, dDV } = splitRucParaXml(rucRaw);
-    rucEmisor = cuerpo;
-    dvEmisor = dDV;
-  } catch (e) {
-    return NextResponse.json(errorResponse(`RUC del emisor invalido en configuración SIFEN: ${(e as Error).message}`), { status: 400 });
-  }
-
-  // 4. Secuencia atomica para dSecMsg
+  // 3. Secuencia atomica para dId
   const { data: seqRow, error: seqErr } = await supabase
     .from("empresa_sifen_config")
     .update({ sifen_evento_seq: (Number(cfg.sifen_evento_seq ?? 0) + 1) })
@@ -134,70 +128,73 @@ export async function handleCancelarSetPost(
   if (seqErr || !seqRow) {
     return NextResponse.json(errorResponse(`No se pudo incrementar la secuencia de eventos: ${seqErr?.message ?? "sin fila"}`), { status: 500 });
   }
-  const dSecMsg = String(seqRow.sifen_evento_seq);
+  const dId = Number(seqRow.sifen_evento_seq);
 
-  // 5. Armar XML, firmar, enviar
-  let xmlEvento: string;
+  // 4. Escribir el .p12 en un tmp (las libs TIPS esperan path, no Buffer)
+  const tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), "sifen-event-"));
+  const tmpP12 = path.join(tmpDir, `${crypto.randomUUID()}.p12`);
+  await fs.writeFile(tmpP12, p12Dl.data);
+
+  let xmlEvento = "";
+  let xmlFirmado = "";
+  let setRespStr = "";
   try {
-    xmlEvento = buildCancelacionEventXml({
-      cdc,
-      motivo,
-      dSecMsg,
-      rucEmisor,
-      dvEmisor,
-      nombreEmisor,
-    }).xml;
-  } catch (e) {
-    return NextResponse.json(errorResponse(`Error armando XML del evento: ${(e as Error).message}`), { status: 500 });
-  }
+    // 5. Generar XML del evento
+    const paramsXmlgen = {
+      version: 150,
+      ruc: String(cfg.ruc ?? "").trim(),
+      razonSocial: String(cfg.razon_social ?? "").trim() || "Emisor",
+      timbradoNumero: String(cfg.timbrado_numero ?? "").trim(),
+      timbradoFecha: "2024-01-01", // valor dummy — los eventos no validan este campo
+      tipoContribuyente: 2,
+      tipoRegimen: 8,
+      establecimientos: [{ codigo: "001" }],
+    };
+    xmlEvento = await xmlgen.generateXMLEventoCancelacion(dId, paramsXmlgen, { cdc, motivo });
 
-  let xmlFirmado: string;
-  try {
-    const material = extractKeyAndCertFromP12(p12Dl.data, p12Password);
-    xmlFirmado = signSifenEventoXml(xmlEvento, material);
-  } catch (e) {
-    return NextResponse.json(errorResponse(`Error firmando el evento: ${(e as Error).message}`), { status: 500 });
-  }
+    // 6. Firmar
+    xmlFirmado = await xmlsign.signXML(xmlEvento, tmpP12, p12Password);
 
-  let resp;
-  try {
-    resp = await enviarEventoSifen({
-      empresaConfig: {
-        ambiente,
-        certificadoP12: p12Dl.data,
-        certificadoPassword: p12Password,
-      },
-      xmlEventoFirmado: xmlFirmado,
-    });
+    // 7. Enviar a SET
+    const env = toSetEnv(ambiente);
+    const setResp = await setApi.evento(dId, xmlFirmado, env, tmpP12, p12Password);
+    setRespStr = typeof setResp === "string" ? setResp : JSON.stringify(setResp);
   } catch (e) {
-    return NextResponse.json(errorResponse(`Fallo al enviar el evento a SET: ${(e as Error).message}`), { status: 502 });
+    await fs.rm(tmpDir, { recursive: true, force: true }).catch(() => {});
+    const m = e instanceof Error ? e.message : String(e);
+    return NextResponse.json(errorResponse(`Error en el flujo SIFEN: ${m}`), { status: 500 });
   }
+  await fs.rm(tmpDir, { recursive: true, force: true }).catch(() => {});
 
-  // 6. Interpretar respuesta
-  const codEve = (resp.dCodResEve ?? "").trim();
-  const codLote = (resp.dCodRes ?? "").trim();
-  const msgEve = (resp.dMsgResEve ?? resp.dMsgRes ?? "").trim();
-  const protAut = (resp.dProtAut ?? "").trim() || null;
-  const aprobado = codEve === "0601";  // SIFEN: evento registrado
-  // Si el codigo del evento NO vino, caemos al codigo del lote. SET devuelve
-  // 0160 / 0161 / etc cuando rechaza el XML entero antes de procesarlo
-  // (en esos casos dCodResEve viene vacio y hay que marcar rechazado igual).
-  const loteRechazado = codLote !== "" && codLote !== "0300";
+  // 8. Parsear respuesta — buscar codigo del evento
+  const extract = (tag: string): string | null => {
+    const re = new RegExp(`<(?:[^\\s/>:]+:)?${tag}\\b[^>]*>([\\s\\S]*?)</(?:[^\\s/>:]+:)?${tag}\\b[^>]*>`, "i");
+    const m = setRespStr.match(re);
+    if (!m?.[1]) return null;
+    const inner = m[1].replace(/<[^>]+>/g, "").trim();
+    return inner.length > 0 ? inner : null;
+  };
+  const codEve = extract("dCodResEve") ?? "";
+  const codLote = extract("dCodRes") ?? "";
+  const msgEve = extract("dMsgResEve") ?? extract("dMsgRes") ?? "";
+  const protAut = extract("dProtAut") ?? null;
+  const aprobado = codEve === "0601" || codLote === "0601";
+  const loteRechazado = codLote !== "" && codLote !== "0300" && codLote !== "0601";
   const nuevoSetEstado: "enviado" | "aprobado" | "rechazado" = aprobado
     ? "aprobado"
     : codEve || loteRechazado
       ? "rechazado"
       : "enviado";
 
-  // 7. Guardar en la factura electronica
+  // 9. Guardar en la factura electronica
   const updates: Record<string, unknown> = {
     set_cancelacion_estado: nuevoSetEstado,
-    set_cancelacion_cod_res: codEve || resp.dCodRes || null,
+    set_cancelacion_cod_res: codEve || codLote || null,
     set_cancelacion_msg_res: msgEve || null,
     set_cancelacion_d_prot_aut: protAut,
     set_cancelacion_at: new Date().toISOString(),
     set_cancelacion_motivo: motivo,
-    set_cancelacion_d_sec_msg: dSecMsg,
+    set_cancelacion_d_sec_msg: String(dId),
   };
   if (aprobado && estado !== "cancelado") {
     updates.estado_sifen = "cancelado";
@@ -211,31 +208,28 @@ export async function handleCancelarSetPost(
     .eq("id", feRow.id)
     .eq("empresa_id", auth.empresa_id);
   if (updErr) {
-    return NextResponse.json(errorResponse(`Evento enviado pero no se pudo guardar el resultado: ${updErr.message}`), { status: 500 });
+    return NextResponse.json(errorResponse(`Evento enviado pero no se pudo guardar: ${updErr.message}`), { status: 500 });
   }
 
-  // 8. Traza completa (incluye SOAP crudo y XMLs para debug SIFEN)
+  // 10. Traza con XMLs + respuesta cruda
   await supabase.from("factura_electronica_evento").insert({
     empresa_id: auth.empresa_id,
     factura_electronica_id: feRow.id,
     tipo: "cancelacion",
     detalle: {
-      origen: "api_cancelar_set",
+      origen: "api_cancelar_set_tips",
       ambiente,
-      dSecMsg,
-      dCodRes: resp.dCodRes,
-      dMsgRes: resp.dMsgRes,
+      dId,
+      dCodRes: codLote,
+      dMsgRes: extract("dMsgRes"),
       dCodResEve: codEve,
       dMsgResEve: msgEve,
       dProtAut: protAut,
-      httpStatus: resp.httpStatus,
       aprobado,
       motivo,
-      // DIAGNOSTICO: para poder depurar rechazos de SET sin reproducir
       xml_evento_sin_firmar: xmlEvento,
       xml_evento_firmado: xmlFirmado,
-      soap_body_enviado: resp.solicitudHttps.soapBodyUtf8,
-      soap_response_cruda: resp.cuerpoSoapCrudo,
+      soap_response_cruda: setRespStr,
     },
   });
 
@@ -246,8 +240,7 @@ export async function handleCancelarSetPost(
       d_cod_res_eve: codEve,
       d_msg_res_eve: msgEve,
       d_prot_aut: protAut,
-      d_sec_msg: dSecMsg,
-      http_status: resp.httpStatus,
+      d_sec_msg: String(dId),
     })
   );
 }
