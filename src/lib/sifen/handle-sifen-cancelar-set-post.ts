@@ -165,14 +165,21 @@ export async function handleCancelarSetPost(
     //     el container no tiene JDK → se cuelga esperando el proceso Java.
     xmlFirmado = await xmlsign.signXMLEvento(xmlEvento, tmpP12, p12Password, true);
 
-    // 7. Enviar a SET con timeout corto (25s) para que no corte el proxy frontal
+    // 7. Enviar a SET con hard-timeout afuera (Promise.race) — axios timeout
+    // interno NO funciona si el handshake mTLS cuelga.
     const env = toSetEnv(ambiente);
-    console.log("[cancelar-set] enviando a SET...", { dId, env });
-    const setResp = await setApi.evento(dId, xmlFirmado, env, tmpP12, p12Password, {
-      debug: true,
-      timeout: 25000,
-    });
-    console.log("[cancelar-set] respuesta recibida de SET");
+    console.log("[cancelar-set] enviando a SET...", { dId, env, xmlLen: xmlFirmado.length });
+    const t0 = Date.now();
+    const setResp = await Promise.race([
+      setApi.evento(dId, xmlFirmado, env, tmpP12, p12Password, {
+        debug: true,
+        timeout: 20000,
+      }),
+      new Promise((_r, reject) =>
+        setTimeout(() => reject(new Error("Hard timeout 22s en setApi.evento (posible cuelgue mTLS)")), 22000)
+      ),
+    ]);
+    console.log("[cancelar-set] respuesta recibida de SET", { ms: Date.now() - t0 });
     setRespParsed = setResp;
     try {
       // JSON.stringify puede fallar si hay circular refs — fallback a inspect-like.
