@@ -41,6 +41,25 @@ export async function handleCancelarSetPost(
   request: NextRequest,
   params: Promise<{ id: string }>
 ): Promise<NextResponse> {
+  // Wrapper global para que CUALQUIER excepcion termine devolviendo JSON con
+  // el mensaje real, en vez de un 500 con body vacio que no dice nada.
+  try {
+    return await handleCancelarSetPostInner(request, params);
+  } catch (e) {
+    const m = e instanceof Error ? e.message : String(e);
+    const stack = e instanceof Error ? e.stack : "";
+    console.error("[cancelar-set][OUTER]", m, stack);
+    return NextResponse.json(
+      errorResponse(`Error inesperado en cancelar-set: ${m}`),
+      { status: 500 }
+    );
+  }
+}
+
+async function handleCancelarSetPostInner(
+  request: NextRequest,
+  params: Promise<{ id: string }>
+): Promise<NextResponse> {
   const ctx = await getFacturasSupabaseFromAuth(request);
   if (!ctx) return NextResponse.json(errorResponse(API_ERRORS.UNAUTHORIZED), { status: 401 });
   const { auth, supabase } = ctx;
