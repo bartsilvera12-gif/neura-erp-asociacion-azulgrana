@@ -165,17 +165,41 @@ export async function handleCancelarSetPost(
     //     el container no tiene JDK → se cuelga esperando el proceso Java.
     xmlFirmado = await xmlsign.signXMLEvento(xmlEvento, tmpP12, p12Password, true);
 
-    // 7. Enviar a SET con debug habilitado para que loguee el request
+    // 7. Enviar a SET con timeout corto (25s) para que no corte el proxy frontal
     const env = toSetEnv(ambiente);
+    console.log("[cancelar-set] enviando a SET...", { dId, env });
     const setResp = await setApi.evento(dId, xmlFirmado, env, tmpP12, p12Password, {
       debug: true,
-      timeout: 60000,
+      timeout: 25000,
     });
+    console.log("[cancelar-set] respuesta recibida de SET");
     setRespParsed = setResp;
-    setRespStr = typeof setResp === "string" ? setResp : JSON.stringify(setResp, null, 2);
+    try {
+      // JSON.stringify puede fallar si hay circular refs — fallback a inspect-like.
+      setRespStr = typeof setResp === "string" ? setResp : JSON.stringify(setResp, null, 2);
+    } catch (serErr) {
+      console.error("[cancelar-set] JSON.stringify fallo", serErr);
+      setRespStr = "[respuesta no serializable: " + (serErr instanceof Error ? serErr.message : String(serErr)) + "]";
+    }
   } catch (e) {
     await fs.rm(tmpDir, { recursive: true, force: true }).catch(() => {});
     const m = e instanceof Error ? e.message : String(e);
+    console.error("[cancelar-set] fallo en flujo SIFEN:", m, e instanceof Error ? e.stack : "");
+    // Guardar la traza del fallo para debug.
+    try {
+      await supabase.from("factura_electronica_evento").insert({
+        empresa_id: auth.empresa_id,
+        factura_electronica_id: feRow.id,
+        tipo: "cancelacion",
+        detalle: {
+          origen: "api_cancelar_set_tips_fallo",
+          error: m,
+          dId,
+          xml_evento: xmlEvento,
+          xml_firmado: xmlFirmado,
+        },
+      });
+    } catch {}
     return NextResponse.json(errorResponse(`Error en el flujo SIFEN: ${m}`), { status: 500 });
   }
   await fs.rm(tmpDir, { recursive: true, force: true }).catch(() => {});
@@ -184,14 +208,15 @@ export async function handleCancelarSetPost(
   // Buscamos los campos SIFEN recursivamente por nombre, ignorando el prefijo
   // de namespace (puede ser ns2:, ns3:, o default). Funciona tanto si setResp
   // viene como objeto parseado como si setRespStr viene como JSON string.
-  const findInTree = (node: unknown, name: string): string | null => {
+  const findInTree = (node: unknown, name: string, depth = 0): string | null => {
+    if (depth > 20) return null; // guard contra circulares
     if (node == null) return null;
     if (typeof node === "string" || typeof node === "number") {
       return String(node);
     }
     if (Array.isArray(node)) {
       for (const el of node) {
-        const r = findInTree(el, name);
+        const r = findInTree(el, name, depth + 1);
         if (r != null) return r;
       }
       return null;
@@ -199,23 +224,20 @@ export async function handleCancelarSetPost(
     if (typeof node === "object") {
       const o = node as Record<string, unknown>;
       for (const k of Object.keys(o)) {
-        // match sin importar prefijo (ns2:dCodRes, dCodRes, etc.)
         const bare = k.replace(/^[^:]+:/, "");
         if (bare === name) {
           const v = o[k];
           if (typeof v === "string" || typeof v === "number") return String(v);
-          // caso {_: "valor", $: {...}} de xml2js
           if (v && typeof v === "object" && "_" in (v as Record<string, unknown>)) {
             const under = (v as Record<string, unknown>)._;
             if (typeof under === "string" || typeof under === "number") return String(under);
           }
-          // seguir buscando dentro
-          const nested = findInTree(v, name);
+          const nested = findInTree(v, name, depth + 1);
           if (nested != null) return nested;
         }
       }
       for (const k of Object.keys(o)) {
-        const r = findInTree(o[k], name);
+        const r = findInTree(o[k], name, depth + 1);
         if (r != null) return r;
       }
     }
