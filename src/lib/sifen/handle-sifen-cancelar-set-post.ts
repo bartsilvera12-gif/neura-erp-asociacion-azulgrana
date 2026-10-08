@@ -175,12 +175,17 @@ export async function handleCancelarSetPost(
 
   // 6. Interpretar respuesta
   const codEve = (resp.dCodResEve ?? "").trim();
+  const codLote = (resp.dCodRes ?? "").trim();
   const msgEve = (resp.dMsgResEve ?? resp.dMsgRes ?? "").trim();
   const protAut = (resp.dProtAut ?? "").trim() || null;
   const aprobado = codEve === "0601";  // SIFEN: evento registrado
+  // Si el codigo del evento NO vino, caemos al codigo del lote. SET devuelve
+  // 0160 / 0161 / etc cuando rechaza el XML entero antes de procesarlo
+  // (en esos casos dCodResEve viene vacio y hay que marcar rechazado igual).
+  const loteRechazado = codLote !== "" && codLote !== "0300";
   const nuevoSetEstado: "enviado" | "aprobado" | "rechazado" = aprobado
     ? "aprobado"
-    : codEve
+    : codEve || loteRechazado
       ? "rechazado"
       : "enviado";
 
@@ -209,7 +214,7 @@ export async function handleCancelarSetPost(
     return NextResponse.json(errorResponse(`Evento enviado pero no se pudo guardar el resultado: ${updErr.message}`), { status: 500 });
   }
 
-  // 8. Traza
+  // 8. Traza completa (incluye SOAP crudo y XMLs para debug SIFEN)
   await supabase.from("factura_electronica_evento").insert({
     empresa_id: auth.empresa_id,
     factura_electronica_id: feRow.id,
@@ -226,6 +231,11 @@ export async function handleCancelarSetPost(
       httpStatus: resp.httpStatus,
       aprobado,
       motivo,
+      // DIAGNOSTICO: para poder depurar rechazos de SET sin reproducir
+      xml_evento_sin_firmar: xmlEvento,
+      xml_evento_firmado: xmlFirmado,
+      soap_body_enviado: resp.solicitudHttps.soapBodyUtf8,
+      soap_response_cruda: resp.cuerpoSoapCrudo,
     },
   });
 
