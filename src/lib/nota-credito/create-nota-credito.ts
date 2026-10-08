@@ -79,22 +79,13 @@ export async function createNotaCreditoBorrador(p: CreateNotaCreditoParams): Pro
   }
 
   const estadoFactura = String((factura as { estado?: string }).estado ?? "");
-  if (estadoFactura === "Anulado") {
-    return { ok: false, status: 409, error: "La factura está anulada; no corresponde nota de crédito." };
-  }
 
-  const saldo = num((factura as { saldo?: unknown }).saldo);
-  const montoFactura = num((factura as { monto?: unknown }).monto);
-  if (saldo <= 0) {
-    return { ok: false, status: 409, error: "La factura no tiene saldo pendiente; no corresponde nota de crédito." };
-  }
-
-  const monedaRaw = String((factura as { moneda?: string }).moneda ?? "GS").toUpperCase();
-  const monedaSnapshot = monedaRaw === "USD" ? "USD" : "GS";
-
+  // Caso NC-fiscal: factura anulada en ERP pero DE sigue vigente en SET —
+  // la NC es necesaria para anular el efecto fiscal. Lo detectamos leyendo
+  // factura_electronica antes de los checks.
   const { data: feRow, error: errFe } = await p.supabase
     .from("factura_electronica")
-    .select("id, factura_id, estado_sifen, sifen_aprobado_at, sifen_cancelado_at, cdc, xml_firmado_path")
+    .select("id, factura_id, estado_sifen, sifen_aprobado_at, sifen_cancelado_at, cdc, xml_firmado_path, set_cancelacion_estado")
     .eq("factura_id", p.facturaId)
     .eq("empresa_id", p.empresaId)
     .maybeSingle();
@@ -107,7 +98,26 @@ export async function createNotaCreditoBorrador(p: CreateNotaCreditoParams): Pro
   }
 
   const estadoSifen = String((feRow as { estado_sifen?: string }).estado_sifen ?? "");
-  if (estadoSifen !== "aprobado") {
+  const setCancEstado = String((feRow as { set_cancelacion_estado?: string }).set_cancelacion_estado ?? "");
+  const aprobadoAt = (feRow as { sifen_aprobado_at?: string | null }).sifen_aprobado_at;
+  const deSiguieVigenteEnSet = Boolean(
+    aprobadoAt && estadoSifen === "cancelado" && setCancEstado !== "aprobado"
+  );
+
+  if (estadoFactura === "Anulado" && !deSiguieVigenteEnSet) {
+    return { ok: false, status: 409, error: "La factura está anulada; no corresponde nota de crédito." };
+  }
+
+  const saldo = num((factura as { saldo?: unknown }).saldo);
+  const montoFactura = num((factura as { monto?: unknown }).monto);
+  if (saldo <= 0 && !deSiguieVigenteEnSet) {
+    return { ok: false, status: 409, error: "La factura no tiene saldo pendiente; no corresponde nota de crédito." };
+  }
+
+  const monedaRaw = String((factura as { moneda?: string }).moneda ?? "GS").toUpperCase();
+  const monedaSnapshot = monedaRaw === "USD" ? "USD" : "GS";
+
+  if (estadoSifen !== "aprobado" && !deSiguieVigenteEnSet) {
     return {
       ok: false,
       status: 409,
