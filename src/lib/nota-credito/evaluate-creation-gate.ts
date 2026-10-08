@@ -157,7 +157,11 @@ export async function evaluateNotaCreditoCreationGate(
   }
 
   const esperadoSaldo = Math.max(0, monto - sumaPagos);
-  if (Math.abs(saldo - esperadoSaldo) > 0.02) {
+  if (Math.abs(saldo - esperadoSaldo) > 0.02 && !deSiguieVigenteEnSet) {
+    // Si el DE sigue vigente en SET (anulada en ERP pero no en SET), el saldo
+    // esta en 0 por la cancelacion local pero el monto fiscal sigue siendo
+    // el original. La NC debe emitirse por el monto original para anular el
+    // efecto fiscal — este check no aplica en ese caso.
     return {
       puede_crear: false,
       motivo_bloqueo: "El saldo no coincide con monto − pagos; corregí la factura antes de continuar.",
