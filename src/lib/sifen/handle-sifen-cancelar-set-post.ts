@@ -151,7 +151,13 @@ export async function handleCancelarSetPost(
       tipoRegimen: 8,
       establecimientos: [{ codigo: "001" }],
     };
-    xmlEvento = await xmlgen.generateXMLEventoCancelacion(dId, paramsXmlgen, { cdc, motivo });
+    const xmlEventoRaw = await xmlgen.generateXMLEventoCancelacion(dId, paramsXmlgen, { cdc, motivo });
+    // xmlgen hardcodea `rEve Id="1"` siempre. SIFEN usa (emisor, Id) para
+    // detectar duplicados: si antes alguien envio un evento con Id="1" el
+    // nuevo rebota con 0100 "Error Inesperado". Lo reemplazo por nuestro
+    // dSecMsg que es unico por emisor.
+    const idRevUnico = String(dId);
+    xmlEvento = xmlEventoRaw.replace(/<rEve Id="1">/g, `<rEve Id="${idRevUnico}">`);
 
     // 6. Firmar — IMPORTANTE:
     //   - signXMLEvento firma el nodo <rEve>; signXML firmaría <DE> (equivocado).
