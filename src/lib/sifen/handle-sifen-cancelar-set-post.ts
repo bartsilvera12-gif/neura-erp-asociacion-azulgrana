@@ -316,7 +316,7 @@ async function handleCancelarSetPostInner(
       ambiente,
       dId,
       dCodRes: codLote,
-      dMsgRes: extract("dMsgRes"),
+      dMsgRes: findInTree(setRespParsed, "dMsgRes"),
       dCodResEve: codEve,
       dMsgResEve: msgEve,
       dProtAut: protAut,
