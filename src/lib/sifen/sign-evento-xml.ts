@@ -45,8 +45,10 @@ export function signSifenEventoXml(xmlUtf8: string, material: P12KeyMaterial): s
     digestAlgorithm: DIGEST,
   });
 
+  // No usar prefix "ds:" en la firma — el DE sender (ya probado contra SET
+  // en producción) tampoco lo usa y funciona. Al agregarle `ds:` SIFEN
+  // rechaza con "XML Mal Formado".
   sig.computeSignature(trimmed, {
-    prefix: "ds",
     location: {
       reference: XPATH_REVE,
       /** HERMANO del rEve (siguiente), dentro del rGesEve. */
