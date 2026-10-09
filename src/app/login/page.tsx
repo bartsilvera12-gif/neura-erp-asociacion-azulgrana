@@ -110,11 +110,10 @@ export default function LoginPage() {
                 <button
                   type="button"
                   tabIndex={-1}
-                  onMouseDown={() => setShowPass(true)}
-                  onMouseUp={() => setShowPass(false)}
-                  onMouseLeave={() => setShowPass(false)}
+                  onClick={() => setShowPass((v) => !v)}
                   className="absolute right-3 top-1/2 -translate-y-1/2 p-1 text-slate-500 transition-colors hover:text-[#0F172A]"
                   aria-label={showPass ? "Ocultar contraseña" : "Mostrar contraseña"}
+                  title={showPass ? "Ocultar contraseña" : "Mostrar contraseña"}
                 >
                   {showPass ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                 </button>
