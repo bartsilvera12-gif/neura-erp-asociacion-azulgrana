@@ -49,6 +49,37 @@ export function validarRuc(v: string | null | undefined, tipo: "empresa" | "pers
   return null;
 }
 
+/**
+ * Dígito verificador de RUC/cédula paraguaya: módulo 11 con pesos cíclicos 2..11,
+ * el mismo algoritmo que la SET (igual que el DV del CDC en SIFEN). Devuelve el
+ * dígito 0-9, o `null` si la base no tiene al menos 2 dígitos numéricos.
+ */
+export function digitoVerificadorRuc(base: string | null | undefined): number | null {
+  const s = (base ?? "").replace(/\D/g, "");
+  if (s.length < 2) return null;
+  let k = 2;
+  let total = 0;
+  for (let i = s.length; i > 0; i--) {
+    if (k > 11) k = 2;
+    total += parseInt(s.substring(i - 1, i), 10) * k;
+    k += 1;
+  }
+  const resto = total % 11;
+  return resto > 1 ? 11 - resto : 0;
+}
+
+/**
+ * Arma el RUC de una persona física a partir de su cédula: `cédula-DV`.
+ * Solo para una cédula numérica de 6-9 dígitos (misma regla que `validarDocumento`).
+ * Devuelve "" si la cédula aún no tiene largo válido (ej. mientras se tipea).
+ */
+export function rucDesdeCedula(cedula: string | null | undefined): string {
+  const s = (cedula ?? "").replace(/\D/g, "");
+  if (s.length < 6 || s.length > 9) return "";
+  const dv = digitoVerificadorRuc(s);
+  return dv == null ? "" : `${s}-${dv}`;
+}
+
 export function validarDocumento(v: string | null | undefined): string | null {
   const raw = (v ?? "").trim();
   if (!raw) return null;

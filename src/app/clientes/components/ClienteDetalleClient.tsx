@@ -31,6 +31,7 @@ import { getFacturas, getSuscripciones } from "@/lib/facturacion/storage";
 import { formatTelefonoPy } from "@/lib/clientes/format-telefono";
 import {
   limpiarDocumento,
+  rucDesdeCedula,
   validarDocumento,
   validarEmail,
   validarNombre,
@@ -702,7 +703,17 @@ export default function ClienteDetalleClient({
     if (["nombre_contacto","empresa","razon_social","ruc","ruc_factura","documento","email","email_secundario","telefono_secundario","sitio_web"].includes(name)) {
       setFieldErrors((prev) => ({ ...prev, [name]: err }));
     }
-    setForm((prev) => ({ ...prev, [name]: normalized }));
+    setForm((prev) => {
+      const next = { ...prev, [name]: normalized };
+      // Autocompletar el RUC de factura a partir de la cédula (persona), solo si el
+      // campo está vacío: así no se pisa un RUC ya cargado a mano. RUC = cédula + DV (SET).
+      if (name === "documento" && prev.tipo_cliente === "persona" && !prev.ruc_factura.trim()) {
+        const limpio = normalized.replace(/\s/g, "");
+        const auto = /^\d{4,}-\d$/.test(limpio) ? limpio : rucDesdeCedula(limpio);
+        if (auto) next.ruc_factura = auto;
+      }
+      return next;
+    });
   }
 
   async function handleGuardar(e: React.FormEvent) {

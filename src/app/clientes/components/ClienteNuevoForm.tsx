@@ -27,6 +27,7 @@ import { ClienteDatosSifenReceptorForm } from "@/components/clientes/ClienteDato
 import { formatTelefonoPy } from "@/lib/clientes/format-telefono";
 import {
   limpiarDocumento,
+  rucDesdeCedula,
   validarDocumento,
   validarEmail,
   validarNombre,
@@ -304,17 +305,15 @@ function ClienteNuevoFormInner({ variant = "page", onCreated, onCancel, fromPros
         if (name === "empresa" && prev.tipo_cliente === "empresa") next.razon_social = normalized;
         else if (name === "nombre_contacto" && prev.tipo_cliente === "persona") next.razon_social = normalized;
       }
-      // Espejo del RUC de factura: sigue al RUC del cliente (empresa) o a un documento con forma de
-      // RUC (persona con guión); una cédula sin guión NO se copia (no es un RUC válido).
+      // Espejo del RUC de factura: sigue al RUC del cliente (empresa) o se calcula a partir de la
+      // cédula (persona). Para persona, el RUC = cédula + dígito verificador (algoritmo SET); si la
+      // cédula ya viene con forma de RUC (dígitos-DV), se respeta tal cual.
       if (name === "ruc_factura") setRucFacturaTouched(true);
       else if (!rucFacturaTouched) {
         if (name === "ruc" && prev.tipo_cliente === "empresa") next.ruc_factura = normalized;
-        else if (
-          name === "documento" &&
-          prev.tipo_cliente === "persona" &&
-          /^\d{4,}-\d$/.test(normalized.replace(/\s/g, ""))
-        ) {
-          next.ruc_factura = normalized;
+        else if (name === "documento" && prev.tipo_cliente === "persona") {
+          const limpio = normalized.replace(/\s/g, "");
+          next.ruc_factura = /^\d{4,}-\d$/.test(limpio) ? limpio : rucDesdeCedula(limpio);
         }
       }
       return next;
