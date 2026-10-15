@@ -1,12 +1,19 @@
 import { defineConfig, globalIgnores } from "eslint/config";
 import nextVitals from "eslint-config-next/core-web-vitals";
 import nextTs from "eslint-config-next/typescript";
+import reactHooks from "eslint-plugin-react-hooks";
+import react from "eslint-plugin-react";
+import tseslint from "@typescript-eslint/eslint-plugin";
 
 const eslintConfig = defineConfig([
   ...nextVitals,
   ...nextTs,
-  /** Reglas muy estrictas de React 19 / hooks: el repo tiene patrones legacy; warning no bloquea CI. */
+  /** Reglas muy estrictas de React 19 / hooks: el repo tiene patrones legacy; warning no bloquea CI.
+   *  eslint-config-next@16 (flat config) ya no registra solo los plugins `react`, `react-hooks`
+   *  y `@typescript-eslint`, así que hay que declararlos acá para que estas reglas puedan aplicarse
+   *  (si no, ESLint ni arranca: "could not find plugin"). */
   {
+    plugins: { "react-hooks": reactHooks, react, "@typescript-eslint": tseslint },
     rules: {
       "react-hooks/set-state-in-effect": "warn",
       "react-hooks/rules-of-hooks": "warn",
