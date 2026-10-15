@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import MontoInput from "@/components/ui/MontoInput";
 import { FancySelect } from "@/app/dashboard/proyectos/components/FancySelect";
 import { savePlan } from "@/lib/planes/storage";
+import { useTiposServicioPlan } from "@/lib/planes/use-tipos-servicio-plan";
 
 const fLabelClass = "block text-xs font-semibold text-slate-500 uppercase tracking-wide mb-1";
 const fInputClass =
@@ -61,6 +62,7 @@ export default function PlanNuevoForm({
 
   const [error, setError] = useState<string | null>(null);
   const [guardando, setGuardando] = useState(false);
+  const { options: tiposServicio, loading: cargandoTipos } = useTiposServicioPlan();
 
   const closeOrBack = () => {
     if (onClose) onClose();
@@ -92,6 +94,10 @@ export default function PlanNuevoForm({
     }
     if (!form.precio || parseFloat(form.precio) <= 0) {
       setError("El precio debe ser mayor a 0.");
+      return;
+    }
+    if (!form.tipo_servicio) {
+      setError("Elegí un tipo de servicio.");
       return;
     }
     setGuardando(true);
@@ -175,6 +181,21 @@ export default function PlanNuevoForm({
                 rows={3}
                 className={fInputClass}
               />
+            </div>
+
+            <div>
+              <label className={fLabelClass}>Tipo de servicio *</label>
+              <FancySelect
+                ariaLabel="Tipo de servicio"
+                value={form.tipo_servicio}
+                onChange={(v) => setField("tipo_servicio", v)}
+                options={tiposServicio}
+                placeholder={cargandoTipos ? "Cargando…" : "Seleccionar tipo de servicio…"}
+                disabled={cargandoTipos}
+              />
+              <p className="mt-1 text-xs text-slate-400">
+                Define en qué equipo cae el servicio en Cobranzas y cómo se clasifica el ingreso.
+              </p>
             </div>
 
             <div>

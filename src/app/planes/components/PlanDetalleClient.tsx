@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import MontoInput from "@/components/ui/MontoInput";
 import { FancySelect, type FancySelectOption } from "@/app/dashboard/proyectos/components/FancySelect";
 import { getPlan, updatePlan, toggleEstadoPlan, deletePlan } from "@/lib/planes/storage";
+import { useTiposServicioPlan } from "@/lib/planes/use-tipos-servicio-plan";
 import type { Plan, PlanMarketingItem } from "@/lib/planes/types";
 import { TIPOS_CONTENIDO } from "@/lib/marketing/types";
 
@@ -134,6 +135,9 @@ export default function PlanDetalleClient({
     es_plan_marketing: false,
     plantilla_items: [] as PlanMarketingItem[],
   });
+  const { options: tiposServicio, loading: cargandoTipos } = useTiposServicioPlan(
+    plan?.tipo_servicio
+  );
 
   useEffect(() => {
     if (!id) return;
@@ -190,6 +194,10 @@ export default function PlanDetalleClient({
     }
     if (!form.precio || parseFloat(form.precio) <= 0) {
       setFormError("El precio debe ser mayor a 0.");
+      return;
+    }
+    if (!form.tipo_servicio) {
+      setFormError("Elegí un tipo de servicio.");
       return;
     }
     const itemsNorm = form.plantilla_items.map((it) => {
@@ -409,6 +417,17 @@ export default function PlanDetalleClient({
                   onChange={handleChange}
                   rows={3}
                   className={fInputClass}
+                />
+              </div>
+              <div>
+                <label className={fLabelClass}>Tipo de servicio *</label>
+                <FancySelect
+                  ariaLabel="Tipo de servicio"
+                  value={form.tipo_servicio}
+                  onChange={(v) => setField("tipo_servicio", v)}
+                  options={tiposServicio}
+                  placeholder={cargandoTipos ? "Cargando…" : "Seleccionar tipo de servicio…"}
+                  disabled={cargandoTipos}
                 />
               </div>
               <div>
