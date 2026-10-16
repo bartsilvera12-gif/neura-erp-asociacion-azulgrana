@@ -36,6 +36,14 @@ type Fila = { fac: FacturaCliente; checked: boolean; montoStr: string; idem: str
 
 const COMPROBANTE_ACCEPT = "image/jpeg,image/png,image/webp,application/pdf";
 const COMPROBANTE_MAX_MB = 8;
+const COMPROBANTE_TYPES = ["image/jpeg", "image/png", "image/webp", "application/pdf"];
+
+/** Valida tipo y tamaño del comprobante. Devuelve el mensaje de error, o null si está OK. */
+function validarComprobante(f: File): string | null {
+  if (!COMPROBANTE_TYPES.includes(f.type)) return "El comprobante debe ser JPG, PNG, WebP o PDF.";
+  if (f.size > COMPROBANTE_MAX_MB * 1024 * 1024) return `El comprobante supera ${COMPROBANTE_MAX_MB} MB.`;
+  return null;
+}
 
 const uuid = () =>
   globalThis.crypto?.randomUUID?.() ??
@@ -65,7 +73,45 @@ export function RegistrarPagoModal({
   const [guardando, setGuardando] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [doneMsg, setDoneMsg] = useState<string | null>(null);
+  const [arrastrando, setArrastrando] = useState(false);
   const { bancos } = useBancosActivos(open && !!factura);
+
+  /** Toma un archivo (de elegir, arrastrar o pegar), lo valida y lo setea como comprobante. */
+  const aplicarComprobante = useCallback((f: File | null) => {
+    if (!f) return;
+    const err = validarComprobante(f);
+    if (err) {
+      setErrorMsg(err);
+      return;
+    }
+    setErrorMsg(null);
+    setFile(f);
+  }, []);
+
+  // Pegar el comprobante con Ctrl+V (captura de pantalla o imagen copiada) mientras el modal
+  // está abierto, sin tener que descargarlo a una carpeta. Solo actúa ante una imagen/PDF en
+  // el portapapeles; pegar texto en los campos sigue funcionando normal.
+  useEffect(() => {
+    if (!open) return;
+    function onPaste(e: ClipboardEvent) {
+      const items = e.clipboardData?.items;
+      if (!items) return;
+      for (const it of Array.from(items)) {
+        if (it.kind !== "file") continue;
+        const f = it.getAsFile();
+        if (!f || !COMPROBANTE_TYPES.includes(f.type)) continue;
+        e.preventDefault();
+        // Las capturas pegadas suelen venir como "image.png": le damos un nombre propio.
+        const ext = f.type.split("/")[1] || "png";
+        const named =
+          f.name && f.name !== "image.png" ? f : new File([f], `comprobante-${Date.now()}.${ext}`, { type: f.type });
+        aplicarComprobante(named);
+        return;
+      }
+    }
+    window.addEventListener("paste", onPaste);
+    return () => window.removeEventListener("paste", onPaste);
+  }, [open, aplicarComprobante]);
 
   const cargarFacturas = useCallback(async (clienteId: string) => {
     setCargando(true);
@@ -96,6 +142,7 @@ export function RegistrarPagoModal({
     setTitular("");
     setNumeroOperacion("");
     setFile(null);
+    setArrastrando(false);
     setErrorMsg(null);
     setDoneMsg(null);
     void cargarFacturas(factura.cliente_id);
@@ -266,13 +313,60 @@ export function RegistrarPagoModal({
 
               <div>
                 <label className={labelClass} htmlFor="rp-file">Comprobante <span className="text-slate-400">(obligatorio — JPG, PNG, WebP o PDF)</span></label>
-                <input
-                  id="rp-file"
-                  type="file"
-                  accept={COMPROBANTE_ACCEPT}
-                  onChange={(e) => setFile(e.target.files?.[0] ?? null)}
-                  className="w-full text-sm text-slate-600 file:mr-3 file:rounded-lg file:border-0 file:bg-slate-100 file:px-3 file:py-2 file:text-sm file:font-medium file:text-slate-700 hover:file:bg-slate-200"
-                />
+                <div
+                  onDragOver={(e) => {
+                    e.preventDefault();
+                    setArrastrando(true);
+                  }}
+                  onDragLeave={(e) => {
+                    e.preventDefault();
+                    setArrastrando(false);
+                  }}
+                  onDrop={(e) => {
+                    e.preventDefault();
+                    setArrastrando(false);
+                    aplicarComprobante(e.dataTransfer?.files?.[0] ?? null);
+                  }}
+                  className={`rounded-lg border-2 border-dashed px-3 py-4 text-center transition-colors ${
+                    arrastrando ? "border-[#4FAEB2] bg-[#4FAEB2]/5" : "border-slate-300 bg-slate-50"
+                  }`}
+                >
+                  {file ? (
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="truncate text-sm text-slate-700">📎 {file.name}</span>
+                      <button
+                        type="button"
+                        onClick={() => setFile(null)}
+                        className="shrink-0 text-xs font-semibold text-slate-500 hover:text-red-600"
+                      >
+                        Quitar
+                      </button>
+                    </div>
+                  ) : (
+                    <div className="space-y-1.5">
+                      <p className="text-sm text-slate-600">
+                        Arrastrá el comprobante acá o pegalo con{" "}
+                        <kbd className="rounded border border-slate-300 bg-white px-1 text-[11px] font-semibold text-slate-600">Ctrl</kbd>
+                        {" + "}
+                        <kbd className="rounded border border-slate-300 bg-white px-1 text-[11px] font-semibold text-slate-600">V</kbd>
+                      </p>
+                      <p className="text-xs text-slate-400">— o —</p>
+                      <label
+                        htmlFor="rp-file"
+                        className="inline-block cursor-pointer rounded-lg bg-slate-100 px-3 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-200"
+                      >
+                        Seleccionar archivo
+                      </label>
+                    </div>
+                  )}
+                  <input
+                    id="rp-file"
+                    type="file"
+                    accept={COMPROBANTE_ACCEPT}
+                    onChange={(e) => aplicarComprobante(e.target.files?.[0] ?? null)}
+                    className="hidden"
+                  />
+                </div>
               </div>
 
               <div className="flex gap-3 pt-1">
