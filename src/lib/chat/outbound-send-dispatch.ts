@@ -1,5 +1,5 @@
 import type { SupabaseAdmin } from "@/lib/chat/types";
-import { normalizeWaPhone } from "@/lib/chat/wa-phone";
+import { toWaDigitsPy } from "@/lib/chat/wa-phone";
 import { fetchDataSchemaForEmpresaId } from "@/lib/supabase/empresa-data-schema";
 import { getChatPostgresPool, quoteSchemaTable } from "@/lib/supabase/chat-pg-pool";
 import { isLikelyUnexposedTenantChatSchema } from "@/lib/supabase/chat-data-schema";
@@ -194,7 +194,7 @@ function buildOutboundTextContextFromRows(
     throw new Error("El canal WhatsApp está desactivado. Activalo en Configuración.");
   }
 
-  const toDigits = normalizeWaPhone((contact?.phone_number as string) ?? "");
+  const toDigits = toWaDigitsPy((contact?.phone_number as string) ?? "");
   const effective = effectiveOutboundProvider(channel);
 
   if (effective === "ycloud") {
@@ -409,7 +409,7 @@ export async function resolveBaileysContextFromIds(
     throw new Error("El canal WhatsApp por QR está desactivado. Activalo en Configuración.");
   }
 
-  const toDigits = normalizeWaPhone(contactPhone);
+  const toDigits = toWaDigitsPy(contactPhone);
   if (!toDigits) throw new Error("Falta teléfono del contacto para enviar por WhatsApp (QR)");
 
   const cfg =

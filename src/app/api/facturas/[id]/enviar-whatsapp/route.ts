@@ -14,18 +14,14 @@ import { NextRequest, NextResponse } from "next/server";
 import { getFacturasSupabaseFromAuth } from "@/lib/facturacion/facturas-service-client";
 import { successResponse, errorResponse } from "@/lib/api/response";
 import { API_ERRORS } from "@/lib/api/errors";
-import { normalizeWaPhone } from "@/lib/chat/wa-phone";
+import { toWaDigitsPy } from "@/lib/chat/wa-phone";
 
 export const runtime = "nodejs";
 
-/** Devuelve digitos listos para wa.me (sin + ni espacios). Si no empieza con
- *  codigo de pais, antepone 595 (Paraguay) y saca el 0 inicial local. */
+/** Dígitos listos para wa.me (sin + ni espacios), con código de país Paraguay.
+ *  Usa el normalizador canónico, que además corrige el 0 de más pegado al 595. */
 function toWaMeDigits(raw: string): string {
-  const d = normalizeWaPhone(raw);
-  if (!d) return "";
-  if (d.startsWith("595")) return d;
-  if (d.startsWith("0")) return "595" + d.slice(1);
-  return d;
+  return toWaDigitsPy(raw);
 }
 
 export async function GET(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {

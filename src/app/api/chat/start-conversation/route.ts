@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getAuthWithRol } from "@/lib/middleware/auth";
 import { getChatServiceClientForEmpresa } from "@/app/api/chat/_chat-service-client";
-import { normalizeWaPhone } from "@/lib/chat/wa-phone";
+import { toWaDigitsPy } from "@/lib/chat/wa-phone";
 
 /**
  * Le pide al puente Baileys el nombre que WhatsApp conoce del número (agenda del
@@ -44,7 +44,7 @@ export async function POST(request: NextRequest) {
     }
 
     const body = (await request.json().catch(() => null)) as { to?: unknown } | null;
-    const toDigits = normalizeWaPhone(typeof body?.to === "string" ? body.to : "");
+    const toDigits = toWaDigitsPy(typeof body?.to === "string" ? body.to : "");
     if (!toDigits || toDigits.length < 7) {
       return NextResponse.json({ ok: false, error: "Número inválido." }, { status: 400 });
     }
