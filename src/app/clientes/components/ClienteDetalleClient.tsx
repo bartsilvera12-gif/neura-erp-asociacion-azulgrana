@@ -272,6 +272,8 @@ export default function ClienteDetalleClient({
   const [cargandoDetalleCliente, setCargandoDetalleCliente] = useState(false);
   const [errorCarga, setErrorCarga] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<TabId>("informacion");
+  // La ficha abre en SOLO LECTURA; el botón "Editar socio" habilita la edición.
+  const [editando, setEditando] = useState(false);
   const [esAdmin, setEsAdmin] = useState(false);
   const [confirmarEliminar, setConfirmarEliminar] = useState(false);
   const [deletionReason, setDeletionReason] = useState("");
@@ -480,6 +482,7 @@ export default function ClienteDetalleClient({
   const cargar = useCallback(async () => {
     setCargandoCliente(true);
     setCargandoDetalleCliente(false);
+    setEditando(false); // cada (re)carga arranca en solo lectura
     setErrorCarga(null);
     setNotFound(false);
     setCliente(null);
@@ -1698,6 +1701,27 @@ export default function ClienteDetalleClient({
           {activeTab === "informacion" && (
             <form onSubmit={handleGuardar} className="space-y-8 max-w-2xl">
 
+              {/* Barra de edición: la ficha abre en SOLO LECTURA; "Editar socio" habilita los campos. */}
+              <div className="flex items-center justify-between gap-3 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3">
+                <p className="text-sm text-slate-600">
+                  {editando
+                    ? "Estás editando los datos. Guardá al terminar, o tocá Cancelar para descartar."
+                    : "Ficha en solo lectura. Tocá “Editar socio” para modificar los datos."}
+                </p>
+                {!editando && (
+                  <button
+                    type="button"
+                    onClick={() => setEditando(true)}
+                    className="shrink-0 inline-flex items-center gap-1.5 bg-[#4FAEB2] hover:bg-[#3F8E91] text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors shadow-sm active:scale-95"
+                  >
+                    <span aria-hidden>✏️</span> Editar socio
+                  </button>
+                )}
+              </div>
+
+              {/* Todos los campos quedan deshabilitados (solo lectura) salvo en modo edición. */}
+              <fieldset disabled={!editando} className="space-y-8 border-0 p-0 m-0 min-w-0 w-full">
+
               {/* Trazabilidad de baja operativa */}
               {cliente.baja_operativa_at && (
                 <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 space-y-2">
@@ -2225,20 +2249,31 @@ export default function ClienteDetalleClient({
                 </section>
               )}
 
+              </fieldset>
+
               {formError && (
                 <div className="flex items-center gap-2 bg-red-50 border border-red-200 rounded-lg px-4 py-3 text-sm text-red-700">
                   <span>⚠</span><span className="font-medium">{formError}</span>
                 </div>
               )}
 
-              <div className="flex gap-3">
-                <button
-                  type="submit"
-                  className="bg-[#4FAEB2] hover:bg-[#3F8E91] text-white px-5 py-2.5 rounded-lg text-sm font-medium transition-colors shadow-sm active:scale-95"
-                >
-                  Guardar cambios
-                </button>
-              </div>
+              {editando && (
+                <div className="flex gap-3">
+                  <button
+                    type="submit"
+                    className="bg-[#4FAEB2] hover:bg-[#3F8E91] text-white px-5 py-2.5 rounded-lg text-sm font-medium transition-colors shadow-sm active:scale-95"
+                  >
+                    Guardar cambios
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => { setFormError(null); void cargar(); }}
+                    className="border border-slate-200 text-slate-700 px-5 py-2.5 rounded-lg text-sm font-medium hover:bg-slate-50 transition-colors active:scale-95"
+                  >
+                    Cancelar
+                  </button>
+                </div>
+              )}
             </form>
           )}
 
