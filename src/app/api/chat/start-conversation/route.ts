@@ -2,28 +2,26 @@ import { NextRequest, NextResponse } from "next/server";
 import { getAuthWithRol } from "@/lib/middleware/auth";
 import { getChatServiceClientForEmpresa } from "@/app/api/chat/_chat-service-client";
 import { normalizeWaPhone } from "@/lib/chat/wa-phone";
-import { telefonoSignificativo } from "@/lib/telefono";
-import { nombreClienteDisplay } from "@/lib/clientes/display-name";
 
-/** Busca el nombre del socio/cliente cuyo teléfono coincide con `toDigits`. "" si no hay match. */
-async function nombreSocioPorTelefono(
-  supabase: Awaited<ReturnType<typeof getChatServiceClientForEmpresa>>,
-  empresaId: string,
-  toDigits: string
-): Promise<string> {
-  const sig = telefonoSignificativo(toDigits);
-  if (sig.length < 6) return "";
-  const { data } = await supabase
-    .from("clientes")
-    .select("nombre, nombre_contacto, razon_social, empresa, tipo_cliente, telefono, telefono_secundario")
-    .eq("empresa_id", empresaId)
-    .is("deleted_at", null);
-  const match = (data ?? []).find(
-    (cl: { telefono?: string | null; telefono_secundario?: string | null }) =>
-      telefonoSignificativo(String(cl.telefono ?? "")) === sig ||
-      telefonoSignificativo(String(cl.telefono_secundario ?? "")) === sig
-  );
-  return match ? nombreClienteDisplay(match, "") : "";
+/**
+ * Le pide al puente Baileys el nombre que WhatsApp conoce del número (agenda del
+ * teléfono vinculado / pushName). Devuelve "" si no lo conoce (número no guardado que
+ * aún no escribió); en ese caso el nombre se completa solo cuando la persona responde.
+ */
+async function nombreWhatsAppDesdePuente(bridgeUrl: string, toDigits: string): Promise<string> {
+  const url = (bridgeUrl || "").trim().replace(/\/+$/, "");
+  const secret = (process.env.BAILEYS_BRIDGE_SECRET || "").trim();
+  if (!url || !secret) return "";
+  try {
+    const res = await fetch(`${url}/contact-name?to=${encodeURIComponent(toDigits)}`, {
+      headers: { "x-bridge-secret": secret },
+    });
+    if (!res.ok) return "";
+    const j = (await res.json().catch(() => ({}))) as { name?: string | null };
+    return typeof j.name === "string" ? j.name.trim() : "";
+  } catch {
+    return "";
+  }
 }
 
 /**
@@ -57,7 +55,7 @@ export async function POST(request: NextRequest) {
     // Canal WhatsApp por QR (Baileys) activo del tenant.
     const { data: channels, error: chErr } = await supabase
       .from("chat_channels")
-      .select("id, provider, activo")
+      .select("id, provider, activo, config")
       .eq("empresa_id", empresaId)
       .eq("type", "whatsapp");
     if (chErr) {
@@ -66,7 +64,7 @@ export async function POST(request: NextRequest) {
     const channel = (channels ?? []).find(
       (c: { provider?: string | null; activo?: boolean | null }) =>
         String(c.provider ?? "").trim().toLowerCase() === "baileys" && c.activo !== false
-    ) as { id?: string } | undefined;
+    ) as { id?: string; config?: unknown } | undefined;
     if (!channel?.id) {
       return NextResponse.json(
         { ok: false, error: "No hay un canal de WhatsApp por QR activo." },
@@ -75,9 +73,14 @@ export async function POST(request: NextRequest) {
     }
     const channelId = channel.id;
 
-    // Nombre del socio: si el número coincide con un cliente/socio cargado, usamos su nombre
-    // (WhatsApp no da el nombre de un número al que escribimos nosotros).
-    const nombreSocio = await nombreSocioPorTelefono(supabase, empresaId, toDigits);
+    // Nombre que WhatsApp conoce del número (vía el puente). Si no lo conoce, el contacto
+    // queda sin nombre y se completa solo cuando la persona responde (pushName).
+    const cfg =
+      channel.config && typeof channel.config === "object" && !Array.isArray(channel.config)
+        ? (channel.config as Record<string, unknown>)
+        : {};
+    const bridgeUrl = typeof cfg.baileys_bridge_url === "string" ? cfg.baileys_bridge_url : "";
+    const nombreSocio = await nombreWhatsAppDesdePuente(bridgeUrl, toDigits);
 
     // Contacto (idempotente por empresa + teléfono).
     const contactPayload: Record<string, unknown> = {
