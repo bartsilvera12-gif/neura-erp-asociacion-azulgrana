@@ -461,6 +461,28 @@ export async function apiCreateSuscripcion(data: {
   return apiPost<{ id: string; [key: string]: unknown }>("/api/suscripciones", data);
 }
 
+/**
+ * Edita una suscripción existente (precio, plan, días, estado, etc.). No genera facturas;
+ * los cambios rigen para las próximas facturas. Solo se envían los campos a cambiar.
+ */
+export async function apiUpdateSuscripcion(
+  suscripcionId: string,
+  data: {
+    plan_id?: string | null;
+    precio?: number;
+    moneda?: string;
+    duracion_meses?: number;
+    dia_facturacion?: number;
+    dia_vencimiento?: number;
+    estado?: "activa" | "cancelada";
+  }
+): Promise<{ success: true; data: { id: string; [key: string]: unknown } } | { success: false; error: string }> {
+  return apiPatch<{ id: string; [key: string]: unknown }>(
+    `/api/suscripciones/${encodeURIComponent(suscripcionId)}`,
+    data
+  );
+}
+
 /** Elimina una suscripción. Las facturas ya emitidas se conservan (quedan sin vincular). */
 export async function apiDeleteSuscripcion(
   suscripcionId: string

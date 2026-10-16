@@ -21,6 +21,7 @@ import {
   apiCreateFactura,
   apiCreateFacturaWithError,
   apiCreateSuscripcion,
+  apiUpdateSuscripcion,
   apiDeleteSuscripcion,
   apiGetClienteHistorial,
   type BajaOperativaPreview,
@@ -409,6 +410,59 @@ export default function ClienteDetalleClient({
   });
   const [guardandoSusc, setGuardandoSusc] = useState(false);
   const [borrandoSuscId, setBorrandoSuscId] = useState<string | null>(null);
+
+  // Edición de una suscripción existente (corregir monto, plan, días, estado) sin borrar y recrear.
+  const [suscEditando, setSuscEditando] = useState<Suscripcion | null>(null);
+  const [formSuscEditar, setFormSuscEditar] = useState({
+    plan_id: "",
+    precio: "",
+    duracion_meses: "12",
+    dia_facturacion: "1",
+    dia_vencimiento: "10",
+    estado: "activa" as "activa" | "cancelada",
+  });
+  const [guardandoSuscEditar, setGuardandoSuscEditar] = useState(false);
+  const [errorSuscEditar, setErrorSuscEditar] = useState<string | null>(null);
+
+  function abrirEditarSuscripcion(s: Suscripcion) {
+    setFormSuscEditar({
+      plan_id: s.plan_id ?? "",
+      precio: String(s.precio ?? ""),
+      duracion_meses: String(s.duracion_meses ?? 12),
+      dia_facturacion: String(s.dia_facturacion ?? 1),
+      dia_vencimiento: String(s.dia_vencimiento ?? 10),
+      estado: s.estado === "cancelada" ? "cancelada" : "activa",
+    });
+    setErrorSuscEditar(null);
+    setSuscEditando(s);
+  }
+
+  async function guardarEdicionSuscripcion() {
+    if (!suscEditando || guardandoSuscEditar) return;
+    const precioNum = parseFloat(formSuscEditar.precio);
+    if (!Number.isFinite(precioNum) || precioNum < 0) {
+      setErrorSuscEditar("El precio debe ser un número mayor o igual a 0.");
+      return;
+    }
+    setGuardandoSuscEditar(true);
+    setErrorSuscEditar(null);
+    const res = await apiUpdateSuscripcion(suscEditando.id, {
+      plan_id: formSuscEditar.plan_id || null,
+      precio: precioNum,
+      duracion_meses: parseInt(formSuscEditar.duracion_meses, 10) || 12,
+      dia_facturacion: parseInt(formSuscEditar.dia_facturacion, 10) || 1,
+      dia_vencimiento: parseInt(formSuscEditar.dia_vencimiento, 10) || 10,
+      estado: formSuscEditar.estado,
+    });
+    setGuardandoSuscEditar(false);
+    if (!res.success) {
+      setErrorSuscEditar(res.error || "No se pudo guardar la suscripción.");
+      return;
+    }
+    setSuscEditando(null);
+    getSuscripciones(id).then(setSuscripciones);
+    getFacturas(id).then(setFacturas);
+  }
 
   async function eliminarSuscripcion(susc: { id: string; plan_id?: string | null; plan_nombre?: string | null }) {
     if (borrandoSuscId) return;
@@ -2445,6 +2499,19 @@ export default function ClienteDetalleClient({
                             }`}>{s.estado}</span>
                           </td>
                           <td className="px-4 py-3 text-right">
+                            <div className="inline-flex items-center gap-2">
+                            <button
+                              type="button"
+                              onClick={() => abrirEditarSuscripcion(s)}
+                              title="Editar suscripción (monto, plan, días, estado)"
+                              className="inline-flex items-center gap-1 rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-xs font-semibold text-slate-600 transition-colors hover:border-[#4FAEB2]/60 hover:bg-[#4FAEB2]/5 hover:text-[#3F8E91]"
+                            >
+                              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-3.5 w-3.5" aria-hidden="true">
+                                <path d="M12 20h9" />
+                                <path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4 12.5-12.5z" />
+                              </svg>
+                              Editar
+                            </button>
                             <button
                               type="button"
                               onClick={() => void eliminarSuscripcion(s)}
@@ -2464,6 +2531,7 @@ export default function ClienteDetalleClient({
                                 </svg>
                               )}
                             </button>
+                            </div>
                           </td>
                         </tr>
                       ))}
@@ -2769,6 +2837,127 @@ export default function ClienteDetalleClient({
                   className="bg-[#4FAEB2] hover:bg-[#3F8E91] text-white px-4 py-2 rounded-lg text-sm font-medium disabled:opacity-40"
                 >
                   {guardandoFacturaContado ? "Guardando…" : "Emitir factura"}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Modal Editar suscripción (corregir monto/plan/días/estado sin borrar y recrear) */}
+      {suscEditando && cliente && (
+        <div
+          className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4"
+          onClick={() => setSuscEditando(null)}
+        >
+          <div className="bg-white rounded-xl shadow-xl max-w-md w-full p-6" onClick={(e) => e.stopPropagation()}>
+            <h3 className="text-lg font-bold text-gray-800 mb-1">Editar suscripción</h3>
+            <p className="text-xs text-slate-500 mb-4">
+              Los cambios rigen para las próximas facturas que genere el sistema. Las facturas ya
+              emitidas no se modifican.
+            </p>
+            <form
+              onSubmit={(e) => {
+                e.preventDefault();
+                void guardarEdicionSuscripcion();
+              }}
+              className="space-y-4"
+            >
+              <div>
+                <label className={labelClass}>Plan</label>
+                <select
+                  value={formSuscEditar.plan_id}
+                  onChange={(e) => setFormSuscEditar((p) => ({ ...p, plan_id: e.target.value }))}
+                  className={inputClass}
+                >
+                  <option value="">Sin plan</option>
+                  {planes.map((p) => (
+                    <option key={p.id} value={p.id}>
+                      {p.nombre}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className={labelClass}>Precio ({cliente.moneda_preferida === "USD" ? "USD" : "Gs."})</label>
+                <MontoInput
+                  value={formSuscEditar.precio}
+                  onChange={(n) => setFormSuscEditar((p) => ({ ...p, precio: String(n) }))}
+                  className={inputClass}
+                  decimals={cliente.moneda_preferida === "USD"}
+                />
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className={labelClass}>Día de facturación</label>
+                  <input
+                    type="number"
+                    min={1}
+                    max={28}
+                    value={formSuscEditar.dia_facturacion}
+                    onChange={(e) => setFormSuscEditar((p) => ({ ...p, dia_facturacion: e.target.value }))}
+                    className={inputClass}
+                  />
+                </div>
+                <div>
+                  <label className={labelClass}>Día de vencimiento</label>
+                  <input
+                    type="number"
+                    min={1}
+                    max={31}
+                    value={formSuscEditar.dia_vencimiento}
+                    onChange={(e) => setFormSuscEditar((p) => ({ ...p, dia_vencimiento: e.target.value }))}
+                    className={inputClass}
+                  />
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className={labelClass}>Duración (meses)</label>
+                  <input
+                    type="number"
+                    min={1}
+                    value={formSuscEditar.duracion_meses}
+                    onChange={(e) => setFormSuscEditar((p) => ({ ...p, duracion_meses: e.target.value }))}
+                    className={inputClass}
+                  />
+                </div>
+                <div>
+                  <label className={labelClass}>Estado</label>
+                  <select
+                    value={formSuscEditar.estado}
+                    onChange={(e) =>
+                      setFormSuscEditar((p) => ({ ...p, estado: e.target.value as "activa" | "cancelada" }))
+                    }
+                    className={inputClass}
+                  >
+                    <option value="activa">Activa (factura cada mes)</option>
+                    <option value="cancelada">Cancelada (no factura)</option>
+                  </select>
+                </div>
+              </div>
+              {errorSuscEditar ? (
+                <div
+                  role="alert"
+                  className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700"
+                >
+                  {errorSuscEditar}
+                </div>
+              ) : null}
+              <div className="flex gap-2 justify-end pt-2">
+                <button
+                  type="button"
+                  onClick={() => setSuscEditando(null)}
+                  className="px-4 py-2 text-sm text-slate-600 hover:bg-slate-100 rounded-lg"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="submit"
+                  disabled={guardandoSuscEditar || !formSuscEditar.precio.trim()}
+                  className="bg-[#4FAEB2] hover:bg-[#3F8E91] text-white px-4 py-2 rounded-lg text-sm font-medium disabled:opacity-40"
+                >
+                  {guardandoSuscEditar ? "Guardando…" : "Guardar cambios"}
                 </button>
               </div>
             </form>
