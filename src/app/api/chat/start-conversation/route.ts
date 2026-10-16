@@ -2,6 +2,29 @@ import { NextRequest, NextResponse } from "next/server";
 import { getAuthWithRol } from "@/lib/middleware/auth";
 import { getChatServiceClientForEmpresa } from "@/app/api/chat/_chat-service-client";
 import { normalizeWaPhone } from "@/lib/chat/wa-phone";
+import { telefonoSignificativo } from "@/lib/telefono";
+import { nombreClienteDisplay } from "@/lib/clientes/display-name";
+
+/** Busca el nombre del socio/cliente cuyo teléfono coincide con `toDigits`. "" si no hay match. */
+async function nombreSocioPorTelefono(
+  supabase: Awaited<ReturnType<typeof getChatServiceClientForEmpresa>>,
+  empresaId: string,
+  toDigits: string
+): Promise<string> {
+  const sig = telefonoSignificativo(toDigits);
+  if (sig.length < 6) return "";
+  const { data } = await supabase
+    .from("clientes")
+    .select("nombre, nombre_contacto, razon_social, empresa, tipo_cliente, telefono, telefono_secundario")
+    .eq("empresa_id", empresaId)
+    .is("deleted_at", null);
+  const match = (data ?? []).find(
+    (cl: { telefono?: string | null; telefono_secundario?: string | null }) =>
+      telefonoSignificativo(String(cl.telefono ?? "")) === sig ||
+      telefonoSignificativo(String(cl.telefono_secundario ?? "")) === sig
+  );
+  return match ? nombreClienteDisplay(match, "") : "";
+}
 
 /**
  * POST /api/chat/start-conversation
@@ -52,13 +75,20 @@ export async function POST(request: NextRequest) {
     }
     const channelId = channel.id;
 
+    // Nombre del socio: si el número coincide con un cliente/socio cargado, usamos su nombre
+    // (WhatsApp no da el nombre de un número al que escribimos nosotros).
+    const nombreSocio = await nombreSocioPorTelefono(supabase, empresaId, toDigits);
+
     // Contacto (idempotente por empresa + teléfono).
+    const contactPayload: Record<string, unknown> = {
+      empresa_id: empresaId,
+      phone_number: toDigits,
+      phone_normalized: toDigits,
+    };
+    if (nombreSocio) contactPayload.name = nombreSocio;
     const { data: contact, error: cErr } = await supabase
       .from("chat_contacts")
-      .upsert(
-        { empresa_id: empresaId, phone_number: toDigits, phone_normalized: toDigits },
-        { onConflict: "empresa_id,phone_number" }
-      )
+      .upsert(contactPayload, { onConflict: "empresa_id,phone_number" })
       .select("id")
       .single();
     if (cErr || !contact?.id) {
