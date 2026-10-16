@@ -3682,14 +3682,24 @@ export function ConversacionesClient({
                 </span>
               ) : null}
             </div>
-            <button
-              type="button"
-              onClick={() => setListColumnHidden(true)}
-              className="text-[10px] font-medium text-slate-500 hover:text-slate-800 px-1.5 py-0.5 rounded border border-transparent hover:border-slate-200 hover:bg-white"
-              title="Ocultar lista de chats"
-            >
-              Ocultar
-            </button>
+            <div className="flex items-center gap-1.5">
+              <button
+                type="button"
+                onClick={() => router.push("/dashboard/conversaciones/nueva")}
+                className="text-[10px] font-semibold text-[#4FAEB2] hover:text-[#3F8E91] px-1.5 py-0.5 rounded border border-[#4FAEB2]/40 hover:border-[#4FAEB2] hover:bg-[#4FAEB2]/10"
+                title="Iniciar una conversación nueva (mensaje individual)"
+              >
+                + Nueva
+              </button>
+              <button
+                type="button"
+                onClick={() => setListColumnHidden(true)}
+                className="text-[10px] font-medium text-slate-500 hover:text-slate-800 px-1.5 py-0.5 rounded border border-transparent hover:border-slate-200 hover:bg-white"
+                title="Ocultar lista de chats"
+              >
+                Ocultar
+              </button>
+            </div>
           </div>
           <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain">
             {loadingList ? (
