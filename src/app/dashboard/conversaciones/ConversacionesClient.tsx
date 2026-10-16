@@ -3917,6 +3917,7 @@ export function ConversacionesClient({
                           </div>
 
                           <div className="flex flex-wrap items-center justify-end gap-1.5">
+                            {/* Botón "Transferir" ocultado a pedido. Para reactivarlo, descomentar.
                             {vista !== "bot" ? (
                               <button
                                 type="button"
@@ -3932,6 +3933,7 @@ export function ConversacionesClient({
                                 Transferir
                               </button>
                             ) : null}
+                            */}
                             {selected.status !== "closed" && mode === "inbox" ? (
                               <button
                                 type="button"
@@ -3969,6 +3971,7 @@ export function ConversacionesClient({
                                 Reabrir
                               </button>
                             ) : null}
+                            {/* Botón "Modo bot" ocultado a pedido. Para reactivarlo, descomentar.
                             {isHumanActive ? (
                               <button
                                 type="button"
@@ -3979,6 +3982,7 @@ export function ConversacionesClient({
                                 {releasingBot ? "…" : "Modo bot"}
                               </button>
                             ) : null}
+                            */}
                             {canResendCurrentFlowStep ? (
                               <button
                                 type="button"
