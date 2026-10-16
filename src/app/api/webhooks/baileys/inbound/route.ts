@@ -85,6 +85,9 @@ export async function POST(request: NextRequest) {
   const messageKind = String(body?.messageKind ?? "conversation");
   const text = typeof body?.text === "string" ? body.text : "";
   const pushName = typeof body?.pushName === "string" ? (body.pushName as string) : null;
+  // fromMe: el mensaje lo envió el propio número desde el teléfono/app (no desde el ERP).
+  // Se guarda como SALIENTE para que la conversación quede completa. Dedup por wa_message_id.
+  const fromMe = body?.fromMe === true;
 
   if (!channelId || !empresaId || !fromDigits || !waMessageId) {
     return NextResponse.json(
@@ -129,7 +132,7 @@ export async function POST(request: NextRequest) {
       supabase,
       channel: { id: channelId, empresa_id: empresaId, type: channelType },
       external_id: waMessageId,
-      contact_data: { address: fromDigits, display_name: pushName },
+      contact_data: { address: fromDigits, display_name: fromMe ? null : pushName },
       message_data: {
         message_type,
         content: content || placeholder || "",
@@ -137,13 +140,14 @@ export async function POST(request: NextRequest) {
           source: "baileys",
           bridge: {
             fromDigits,
+            fromMe,
             messageKind,
             hasMedia: Boolean(body?.hasMedia),
             timestamp: body?.timestamp ?? null,
           },
         },
-        from_me: false,
-        sender_type: "contact",
+        from_me: fromMe,
+        sender_type: fromMe ? "system" : "contact",
       },
       // Con Contact Center V1 activo, la asignación la hace cc_assign (abajo), no la legacy.
       skipLegacyAutoAssignment: contactCenterV1Enabled(),
@@ -160,7 +164,8 @@ export async function POST(request: NextRequest) {
     const conversationId = result.conversation_id;
 
     // Ventana 24h + asignación por equidad (mismo patrón que el webhook YCloud).
-    if (contactCenterV1Enabled()) {
+    // Solo para ENTRANTES: un mensaje saliente (fromMe) no abre ventana ni asigna agente.
+    if (!fromMe && contactCenterV1Enabled()) {
       const schema = await fetchDataSchemaForEmpresaId(empresaId);
       const pool = getChatPostgresPool();
       if (pool && isLikelyUnexposedTenantChatSchema(schema)) {
