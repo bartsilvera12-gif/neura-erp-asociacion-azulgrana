@@ -49,6 +49,7 @@ import { fetchWithSupabaseSession } from "@/lib/api/fetch-with-supabase-session"
 import { SifenEstadoBadge } from "@/components/sifen/SifenEstadoBadge";
 import { useFacturaSifenEstados } from "@/hooks/useFacturaSifenEstados";
 import { PagoRegistradoExito } from "@/components/pagos/PagoRegistradoExito";
+import { AnularCobroButton } from "@/components/facturas/AnularCobroButton";
 import MontoInput from "@/components/ui/MontoInput";
 import { getPlanes } from "@/lib/planes/storage";
 import { hoyYmdLocal, vencimientoPeriodo } from "@/lib/fechas/calendario";
@@ -2432,6 +2433,17 @@ export default function ClienteDetalleClient({
                                   numeroFactura={f.numero_factura}
                                   variant="compact"
                                   onCondonada={() => { void getFacturas(id).then(setFacturas); }}
+                                />
+                              )}
+                              {esAdmin && (
+                                <AnularCobroButton
+                                  facturaId={f.id}
+                                  saldo={f.saldo}
+                                  monto={f.monto}
+                                  estado={f.estado}
+                                  numeroFactura={f.numero_factura}
+                                  variant="compact"
+                                  onAnulado={() => { void getFacturas(id).then(setFacturas); }}
                                 />
                               )}
                             </div>
