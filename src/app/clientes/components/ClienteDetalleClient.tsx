@@ -49,6 +49,7 @@ import { fetchWithSupabaseSession } from "@/lib/api/fetch-with-supabase-session"
 import { useBancosActivos } from "@/shared/hooks/useBancosActivos";
 import { SifenEstadoBadge } from "@/components/sifen/SifenEstadoBadge";
 import { useFacturaSifenEstados } from "@/hooks/useFacturaSifenEstados";
+import { PagoRegistradoExito } from "@/components/pagos/PagoRegistradoExito";
 import MontoInput from "@/components/ui/MontoInput";
 import { getPlanes } from "@/lib/planes/storage";
 import { hoyYmdLocal, vencimientoPeriodo } from "@/lib/fechas/calendario";
@@ -501,6 +502,8 @@ export default function ClienteDetalleClient({
   const [pagoNumeroOp, setPagoNumeroOp] = useState("");
   const [pagoFile, setPagoFile] = useState<File | null>(null);
   const [errorPago, setErrorPago] = useState<string | null>(null);
+  // Pantalla "¡Pago registrado!" tras un cobro exitoso (WhatsApp + imprimir KuDE).
+  const [pagoExito, setPagoExito] = useState<{ facturaId: string } | null>(null);
   const { bancos: bancosActivos } = useBancosActivos(modalPago);
   useEffect(() => {
     if (modalPago) {
@@ -3273,6 +3276,7 @@ export default function ClienteDetalleClient({
                 const j = (await res.json().catch(() => ({}))) as { success?: boolean; error?: string; data?: { warning?: string } };
                 if (!res.ok || j?.success !== true) { setErrorPago(j?.error || "No se pudo registrar el cobro."); return; }
                 setModalPago(false);
+                setPagoExito({ facturaId: fid });
                 getFacturas(id).then(setFacturas);
               } catch (err) {
                 setErrorPago(err instanceof Error ? err.message : "Error de red. Volvé a intentar.");
@@ -3343,6 +3347,20 @@ export default function ClienteDetalleClient({
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* ¡Pago registrado! — WhatsApp del socio + imprimir KuDE */}
+      {pagoExito && (
+        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4" onClick={() => setPagoExito(null)}>
+          <div className="bg-white rounded-xl shadow-xl max-w-md w-full p-6" onClick={(e) => e.stopPropagation()}>
+            <PagoRegistradoExito
+              clienteId={id}
+              facturaId={pagoExito.facturaId}
+              mensaje="El cobro quedó pendiente de aprobación en Conciliación bancaria. El saldo se actualiza cuando un administrador lo apruebe."
+              onListo={() => setPagoExito(null)}
+            />
           </div>
         </div>
       )}

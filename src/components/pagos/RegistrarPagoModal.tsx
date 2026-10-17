@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import { apiFetch } from "@/lib/api/fetch-with-supabase-session";
 import { hoyYmdLocal } from "@/lib/fechas/calendario";
 import { useBancosActivos } from "@/shared/hooks/useBancosActivos";
+import { PagoRegistradoExito } from "@/components/pagos/PagoRegistradoExito";
 
 const inputClass =
   "w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-800 shadow-sm focus:border-[#4FAEB2] focus:outline-none focus:ring-2 focus:ring-[#4FAEB2]/30";
@@ -218,12 +219,13 @@ export function RegistrarPagoModal({
         </p>
 
         {doneMsg ? (
-          <div className="space-y-4">
-            <div className="rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-3 text-sm text-emerald-800">✅ {doneMsg}</div>
-            <button type="button" onClick={onClose} className="rounded-lg bg-[#3F8E91] px-4 py-2 text-sm font-medium text-white hover:bg-[#357a7d]">
-              Listo
-            </button>
-          </div>
+          <PagoRegistradoExito
+            clienteId={factura.cliente_id}
+            clienteNombre={factura.cliente_label ?? null}
+            facturaId={factura.id}
+            mensaje={doneMsg}
+            onListo={onClose}
+          />
         ) : (
           <>
             {errorMsg && (
