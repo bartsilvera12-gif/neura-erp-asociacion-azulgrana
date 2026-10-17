@@ -46,7 +46,6 @@ import { CondonarSaldoButton } from "@/components/facturas/CondonarSaldoButton";
 import { getMarketingTasks, createMarketingTask, updateTaskStatus } from "@/lib/marketing/storage";
 import { getUsuariosActivosEmpresa, type UsuarioEmpresa } from "@/lib/usuarios/empresa";
 import { fetchWithSupabaseSession } from "@/lib/api/fetch-with-supabase-session";
-import { useBancosActivos } from "@/shared/hooks/useBancosActivos";
 import { SifenEstadoBadge } from "@/components/sifen/SifenEstadoBadge";
 import { useFacturaSifenEstados } from "@/hooks/useFacturaSifenEstados";
 import { PagoRegistradoExito } from "@/components/pagos/PagoRegistradoExito";
@@ -496,23 +495,11 @@ export default function ClienteDetalleClient({
   const [facturaPago, setFacturaPago] = useState<Factura | null>(null);
   const [formPago, setFormPago] = useState({ factura_id: "" as string, monto: "", fecha_pago: "", metodo_pago: "efectivo" as const, referencia: "" });
   const [guardandoPago, setGuardandoPago] = useState(false);
-  // Cobro por transferencia → pendiente de aprobación (Conciliación bancaria).
-  const [pagoBanco, setPagoBanco] = useState("");
-  const [pagoTitular, setPagoTitular] = useState("");
-  const [pagoNumeroOp, setPagoNumeroOp] = useState("");
-  const [pagoFile, setPagoFile] = useState<File | null>(null);
   const [errorPago, setErrorPago] = useState<string | null>(null);
   // Pantalla "¡Pago registrado!" tras un cobro exitoso (WhatsApp + imprimir KuDE).
   const [pagoExito, setPagoExito] = useState<{ facturaId: string } | null>(null);
-  const { bancos: bancosActivos } = useBancosActivos(modalPago);
   useEffect(() => {
-    if (modalPago) {
-      setPagoBanco("");
-      setPagoTitular("");
-      setPagoNumeroOp("");
-      setPagoFile(null);
-      setErrorPago(null);
-    }
+    if (modalPago) setErrorPago(null);
   }, [modalPago]);
   const [modalFacturaContado, setModalFacturaContado] = useState(false);
   const [formFacturaContado, setFormFacturaContado] = useState<{
@@ -3243,7 +3230,7 @@ export default function ClienteDetalleClient({
         <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4" onClick={() => setModalPago(false)}>
           <div className="bg-white rounded-xl shadow-xl max-w-md w-full p-6" onClick={(e) => e.stopPropagation()}>
             <h3 className="text-lg font-bold text-gray-800 mb-1">Registrar cobro</h3>
-            <p className="text-xs text-slate-500 mb-3">Cobro por transferencia. Queda <b>pendiente de aprobación</b> en Conciliación bancaria.</p>
+            <p className="text-xs text-slate-500 mb-3">Cobro en <b>efectivo</b>. El saldo se actualiza al instante.</p>
             {facturaPago && <p className="text-sm text-slate-600 mb-4">Factura {facturaPago.numero_factura} — Saldo: Gs. {facturaPago.saldo.toLocaleString("es-PY")}</p>}
             <form onSubmit={async (e) => {
               e.preventDefault();
@@ -3251,29 +3238,21 @@ export default function ClienteDetalleClient({
               if (!fid) { setErrorPago("Seleccioná una factura."); return; }
               const montoNum = parseFloat(formPago.monto) || 0;
               if (montoNum <= 0) { setErrorPago("Ingresá un monto mayor a cero."); return; }
-              if (!pagoBanco.trim() || !pagoTitular.trim() || !pagoNumeroOp.trim()) {
-                setErrorPago("Completá banco de origen, titular y N° de comprobante.");
-                return;
-              }
-              if (!pagoFile) {
-                setErrorPago("Adjuntá el comprobante de la transferencia.");
-                return;
-              }
+              if (!formPago.fecha_pago) { setErrorPago("Indicá la fecha del cobro."); return; }
               setErrorPago(null);
               setGuardandoPago(true);
               try {
-                const idem = globalThis.crypto?.randomUUID?.() ?? "xxxxxxxx-xxxx-4xxx-8xxx-xxxxxxxxxxxx".replace(/x/g, () => Math.floor(Math.random() * 16).toString(16));
-                const fd = new FormData();
-                fd.set("factura_id", fid);
-                fd.set("monto", String(montoNum));
-                fd.set("fecha", formPago.fecha_pago);
-                fd.set("banco_origen", pagoBanco.trim());
-                fd.set("titular", pagoTitular.trim());
-                fd.set("numero_operacion", pagoNumeroOp.trim());
-                fd.set("idempotency_key", idem);
-                if (pagoFile) fd.set("file", pagoFile, pagoFile.name);
-                const res = await fetchWithSupabaseSession("/api/cobranzas/conciliacion", { method: "POST", body: fd });
-                const j = (await res.json().catch(() => ({}))) as { success?: boolean; error?: string; data?: { warning?: string } };
+                const res = await fetchWithSupabaseSession("/api/pagos", {
+                  method: "POST",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({
+                    factura_id: fid,
+                    monto: montoNum,
+                    fecha_pago: formPago.fecha_pago,
+                    metodo_pago: "efectivo",
+                  }),
+                });
+                const j = (await res.json().catch(() => ({}))) as { success?: boolean; error?: string };
                 if (!res.ok || j?.success !== true) { setErrorPago(j?.error || "No se pudo registrar el cobro."); return; }
                 setModalPago(false);
                 setPagoExito({ facturaId: fid });
@@ -3308,39 +3287,13 @@ export default function ClienteDetalleClient({
                 <MontoInput value={formPago.monto} onChange={(n) => setFormPago((p) => ({ ...p, monto: String(n) }))} className={inputClass} required />
               </div>
               <div>
-                <label className={labelClass}>Fecha de la transferencia</label>
+                <label className={labelClass}>Fecha del cobro</label>
                 <input type="date" value={formPago.fecha_pago} onChange={(e) => setFormPago((p) => ({ ...p, fecha_pago: e.target.value }))} className={inputClass} required />
-              </div>
-              <div>
-                <label className={labelClass}>Banco de origen</label>
-                <select value={pagoBanco} onChange={(e) => setPagoBanco(e.target.value)} className={inputClass} required>
-                  <option value="">— Seleccioná el banco —</option>
-                  {bancosActivos.map((b) => (
-                    <option key={b.id} value={b.nombre}>{b.nombre}</option>
-                  ))}
-                </select>
-              </div>
-              <div>
-                <label className={labelClass}>Titular (quién envía)</label>
-                <input type="text" value={pagoTitular} onChange={(e) => setPagoTitular(e.target.value.toUpperCase())} className={`${inputClass} uppercase placeholder:normal-case`} placeholder="Titular de la cuenta que envía" required />
-              </div>
-              <div>
-                <label className={labelClass}>N° de comprobante / operación</label>
-                <input type="text" value={pagoNumeroOp} onChange={(e) => setPagoNumeroOp(e.target.value)} className={inputClass} placeholder="Nº de operación de la transferencia" required />
-              </div>
-              <div>
-                <label className={labelClass}>Comprobante <span className="text-slate-400">(obligatorio — JPG, PNG, WebP o PDF)</span></label>
-                <input
-                  type="file"
-                  accept="image/jpeg,image/png,image/webp,application/pdf"
-                  onChange={(e) => setPagoFile(e.target.files?.[0] ?? null)}
-                  className="w-full text-sm text-slate-600 file:mr-3 file:rounded-lg file:border-0 file:bg-slate-100 file:px-3 file:py-2 file:text-sm file:font-medium file:text-slate-700 hover:file:bg-slate-200"
-                />
               </div>
               {errorPago && <p className="text-sm text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">{errorPago}</p>}
               <div className="flex gap-3 pt-2">
                 <button type="submit" disabled={guardandoPago} className="bg-[#4FAEB2] hover:bg-[#3F8E91] text-white px-4 py-2 rounded-lg text-sm font-medium disabled:opacity-50">
-                  {guardandoPago ? "Enviando…" : "Enviar a aprobación"}
+                  {guardandoPago ? "Registrando…" : "Cobrar en efectivo"}
                 </button>
                 <button type="button" onClick={() => setModalPago(false)} className="border border-slate-200 px-4 py-2 rounded-lg text-sm hover:bg-slate-50">
                   Cancelar
@@ -3358,7 +3311,7 @@ export default function ClienteDetalleClient({
             <PagoRegistradoExito
               clienteId={id}
               facturaId={pagoExito.facturaId}
-              mensaje="El cobro quedó pendiente de aprobación en Conciliación bancaria. El saldo se actualiza cuando un administrador lo apruebe."
+              mensaje="Cobro en efectivo registrado. El saldo ya se actualizó."
               onListo={() => setPagoExito(null)}
             />
           </div>
