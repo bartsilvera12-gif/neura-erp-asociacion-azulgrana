@@ -74,6 +74,42 @@ export function PagoRegistradoExito({
   const waHref = digits ? `/dashboard/conversaciones?buscar=${encodeURIComponent(digits)}` : null;
   const kudeHref = sifenAprobado && facturaId ? `/api/facturas/${facturaId}/sifen/kude` : null;
 
+  // Enviar la factura por WhatsApp: baja el PDF (KuDE si hay SIFEN, si no el PDF
+  // de factura interna) y abre el chat del socio con el mensaje precargado.
+  const [waBusy, setWaBusy] = useState(false);
+  const [waMsg, setWaMsg] = useState<string | null>(null);
+  async function enviarFacturaWhatsapp() {
+    if (!facturaId) return;
+    setWaBusy(true);
+    setWaMsg(null);
+    try {
+      const res = await fetchWithSupabaseSession(`/api/facturas/${facturaId}/enviar-whatsapp`, { cache: "no-store" });
+      const j = (await res.json().catch(() => ({}))) as {
+        success?: boolean;
+        error?: string;
+        data?: { wa_me_url?: string; pdf_url?: string; filename?: string };
+      };
+      if (!res.ok || !j.success || !j.data?.wa_me_url) {
+        setWaMsg(j.error || "No se pudo preparar el envío.");
+        return;
+      }
+      if (j.data.pdf_url) {
+        const a = document.createElement("a");
+        a.href = j.data.pdf_url;
+        a.download = j.data.filename || "factura.pdf";
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+      }
+      window.open(j.data.wa_me_url, "_blank", "noopener,noreferrer");
+      setWaMsg("Se bajó la factura y se abrió WhatsApp. Adjuntala en el chat y enviala. 📎");
+    } catch (e) {
+      setWaMsg(e instanceof Error ? e.message : "Error de red. Volvé a intentar.");
+    } finally {
+      setWaBusy(false);
+    }
+  }
+
   return (
     <div className="space-y-4 text-center">
       <div className="flex flex-col items-center gap-2">
@@ -89,7 +125,17 @@ export function PagoRegistradoExito({
       ) : null}
 
       <div className="space-y-2">
-        {waHref ? (
+        {facturaId ? (
+          <button
+            type="button"
+            onClick={enviarFacturaWhatsapp}
+            disabled={waBusy}
+            className="flex w-full items-center justify-center gap-2 rounded-xl bg-emerald-600 py-3 text-sm font-semibold text-white hover:bg-emerald-700 disabled:opacity-60"
+          >
+            <MessageCircle className="h-4 w-4" />
+            {waBusy ? "Preparando…" : "Enviar factura por WhatsApp"}
+          </button>
+        ) : waHref ? (
           <a
             href={waHref}
             target="_blank"
@@ -104,6 +150,9 @@ export function PagoRegistradoExito({
             El socio no tiene teléfono cargado para WhatsApp.
           </p>
         )}
+        {waMsg ? (
+          <p className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2.5 text-left text-xs text-slate-600">{waMsg}</p>
+        ) : null}
 
         {/* Imprimir: solo si hay factura electrónica aprobada por la SET (KuDE). Las cuotas
             internas (Sin SIFEN) no tienen KuDE, así que no se muestra nada. */}

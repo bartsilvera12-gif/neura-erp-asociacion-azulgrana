@@ -80,8 +80,20 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
     `${saludo}te comparto tu factura ${f.numero_factura} por ${monedaLabel} ${montoStr}. ` +
     `Cualquier duda, respondé por acá.`;
 
+  // PDF a adjuntar: el KuDE si la factura tiene SIFEN aprobado; si no (cuotas
+  // internas Sin SIFEN), el recibo simple en PDF.
+  const { data: feRow } = await supabase
+    .from("factura_electronica")
+    .select("estado_sifen")
+    .eq("factura_id", id)
+    .eq("empresa_id", auth.empresa_id)
+    .maybeSingle();
+  const sifenAprobado = String((feRow as { estado_sifen?: string | null } | null)?.estado_sifen ?? "") === "aprobado";
+
   const waMeUrl = `https://wa.me/${toDigits}?text=${encodeURIComponent(caption)}`;
-  const pdfUrl = `/api/facturas/${id}/sifen/kude?download=1`;
+  const pdfUrl = sifenAprobado
+    ? `/api/facturas/${id}/sifen/kude?download=1`
+    : `/api/facturas/${id}/recibo-pdf?download=1`;
   const filename = `${f.numero_factura || "factura"}.pdf`.replace(/[^\w.-]+/g, "_");
 
   return NextResponse.json(
