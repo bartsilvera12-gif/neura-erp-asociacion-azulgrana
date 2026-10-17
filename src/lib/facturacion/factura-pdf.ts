@@ -101,20 +101,30 @@ export async function buildFacturaPdfBuffer(input: FacturaPdfInput): Promise<Buf
   // Barra teal como acento
   page.drawRectangle({ x: 0, y: height - 8, width, height: 8, color: teal });
 
+  // Titulo del comprobante a la derecha. Se dibuja primero para reservar su ancho
+  // y evitar que un nombre de emisor largo lo pise.
+  const tituloComp = "FACTURA";
+  const wComp = bold.widthOfTextAtSize(tituloComp, 11);
+  const numFact = `N° ${input.factura.numero_factura}`;
+  const wNum = helv.widthOfTextAtSize(numFact, 9);
+  const rightBlockW = Math.max(wComp, wNum);
+  drawText(page, tituloComp, width - M - wComp, height - M - 14, bold, 11, teal);
+  drawText(page, numFact, width - M - wNum, height - M - 28, helv, 9, slateSoft);
+
+  // Nombre del emisor a la izquierda; si es largo, se achica la fuente para que
+  // entre en el espacio libre y no se superponga con el titulo de la derecha.
   y -= 14;
-  drawText(page, input.emisor.nombre.toUpperCase(), M, y, bold, 13, slate);
+  const nombreEmisor = input.emisor.nombre.toUpperCase();
+  const nombreMaxW = width - M * 2 - rightBlockW - 12;
+  let nombreSize = 13;
+  while (nombreSize > 8 && bold.widthOfTextAtSize(ascii(nombreEmisor), nombreSize) > nombreMaxW) {
+    nombreSize -= 0.5;
+  }
+  drawText(page, nombreEmisor, M, y, bold, nombreSize, slate);
   if (input.emisor.subtitulo) {
     y -= 14;
     drawText(page, input.emisor.subtitulo, M, y, helv, 9, slateSoft);
   }
-
-  // Titulo comprobante a la derecha
-  const tituloComp = "RECIBO DE CUOTA";
-  const wComp = bold.widthOfTextAtSize(tituloComp, 11);
-  drawText(page, tituloComp, width - M - wComp, height - M - 14, bold, 11, teal);
-  const numFact = `N° ${input.factura.numero_factura}`;
-  const wNum = helv.widthOfTextAtSize(numFact, 9);
-  drawText(page, numFact, width - M - wNum, height - M - 28, helv, 9, slateSoft);
 
   y -= 24;
   page.drawLine({
@@ -219,7 +229,7 @@ export async function buildFacturaPdfBuffer(input: FacturaPdfInput): Promise<Buf
   }
 
   // ── Pie ─────────────────────────────────────────────────────────────────
-  const footer = ["Este recibo se genera automaticamente desde el sistema de la asociacion."];
+  const footer = ["Esta factura se genera automaticamente desde el sistema de la asociacion."];
   if (input.emisor.telefono) footer.push(`Tel: ${input.emisor.telefono}`);
   if (input.emisor.email) footer.push(input.emisor.email);
   const footerY = M + 8;
