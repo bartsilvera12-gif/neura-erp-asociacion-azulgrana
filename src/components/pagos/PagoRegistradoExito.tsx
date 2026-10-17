@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { CheckCircle2, Loader2, MessageCircle, Printer } from "lucide-react";
+import { CheckCircle2, MessageCircle, Printer } from "lucide-react";
 import { fetchWithSupabaseSession } from "@/lib/api/fetch-with-supabase-session";
 import { useFacturaSifenEstados } from "@/hooks/useFacturaSifenEstados";
 
@@ -105,23 +105,18 @@ export function PagoRegistradoExito({
           </p>
         )}
 
-        {facturaId ? (
-          kudeHref ? (
-            <a
-              href={kudeHref}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="flex w-full items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white py-3 text-sm font-semibold text-slate-800 hover:bg-slate-50"
-            >
-              <Printer className="h-4 w-4" />
-              Imprimir factura (KuDE)
-            </a>
-          ) : (
-            <p className="flex items-center justify-center gap-2 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2.5 text-xs text-slate-500">
-              <Loader2 className="h-3.5 w-3.5 animate-spin" />
-              La factura todavía no está aprobada por la SET para imprimir.
-            </p>
-          )
+        {/* Imprimir: solo si hay factura electrónica aprobada por la SET (KuDE). Las cuotas
+            internas (Sin SIFEN) no tienen KuDE, así que no se muestra nada. */}
+        {kudeHref ? (
+          <a
+            href={kudeHref}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="flex w-full items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white py-3 text-sm font-semibold text-slate-800 hover:bg-slate-50"
+          >
+            <Printer className="h-4 w-4" />
+            Imprimir factura (KuDE)
+          </a>
         ) : null}
 
         <button
