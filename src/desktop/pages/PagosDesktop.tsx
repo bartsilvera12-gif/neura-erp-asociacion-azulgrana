@@ -6,6 +6,7 @@ import { enRangoCalendario, rangoDesdeHastaInputs, toCalendarDateStr } from "@/l
 import { getFacturas } from "@/lib/gestion-clientes/storage";
 import { getClientes } from "@/lib/clientes/storage";
 import { fetchWithSupabaseSession } from "@/lib/api/fetch-with-supabase-session";
+import { useIsAdmin } from "@/lib/auth/use-is-admin";
 import { RegistrarPagoModal } from "@/components/pagos/RegistrarPagoModal";
 import type { Cliente } from "@/lib/clientes/types";
 import type { Factura } from "@/lib/gestion-clientes/types";
@@ -122,6 +123,12 @@ export default function PagosPage() {
   const [clientes, setClientes] = useState<Cliente[]>([]);
   const [cobrados, setCobrados] = useState<PagoCobrado[]>([]);
   const [cargandoCobrados, setCargandoCobrados] = useState(false);
+  const { isAdmin } = useIsAdmin();
+  // Anular cobro en efectivo (solo admin): devuelve el saldo a la factura.
+  const [anularPago, setAnularPago] = useState<PagoCobrado | null>(null);
+  const [anularMotivo, setAnularMotivo] = useState("");
+  const [anulando, setAnulando] = useState(false);
+  const [anularError, setAnularError] = useState<string | null>(null);
   const [modalPago, setModalPago] = useState(false);
   const [facturaSeleccionada, setFacturaSeleccionada] = useState<Factura | null>(null);
   const [filtroDesde, setFiltroDesde] = useState("");
@@ -679,7 +686,17 @@ export default function PagosPage() {
               <table className="w-full min-w-[1040px] table-auto border-separate border-spacing-0 text-sm">
                 <thead className="bg-slate-50/80">
                   <tr>
-                    {["Factura", "Cliente", "Vendedor", "Monto pagado", "Fecha", "Método", "Usuario", "Fecha y hora"].map(
+                    {[
+                      "Factura",
+                      "Cliente",
+                      "Vendedor",
+                      "Monto pagado",
+                      "Fecha",
+                      "Método",
+                      "Usuario",
+                      "Fecha y hora",
+                      ...(isAdmin ? ["Acción"] : []),
+                    ].map(
                       (h) => (
                         <th
                           key={h}
@@ -730,15 +747,37 @@ export default function PagosPage() {
                       >
                         {p.usuario_nombre}
                       </td>
-                      <td className="min-w-[6rem] px-3 py-3 text-sm text-slate-500 last:pr-5 sm:px-4 [overflow-wrap:anywhere] break-words">
+                      <td className="min-w-[6rem] px-3 py-3 text-sm text-slate-500 sm:px-4 [overflow-wrap:anywhere] break-words">
                         {formatFechaHora(p.fecha_registro)}
                       </td>
+                      {isAdmin && (
+                        <td className="whitespace-nowrap px-3 py-3 text-right last:pr-5 sm:px-4">
+                          {p.metodo_pago === "efectivo" ? (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setAnularPago(p);
+                                setAnularMotivo("");
+                                setAnularError(null);
+                              }}
+                              className="rounded-lg border border-red-200 px-2.5 py-1 text-[11px] font-semibold text-red-600 transition-colors hover:bg-red-50"
+                              title="Anular este cobro y devolver el saldo a la factura"
+                            >
+                              Anular
+                            </button>
+                          ) : (
+                            <span className="text-[11px] text-slate-400" title="Las transferencias se anulan en Conciliación bancaria">
+                              —
+                            </span>
+                          )}
+                        </td>
+                      )}
                     </tr>
                   ))}
                 </tbody>
                 <tfoot>
                   <tr>
-                    <td colSpan={8} className="p-0">
+                    <td colSpan={isAdmin ? 9 : 8} className="p-0">
                       <div
                         className="flex w-full min-w-0 flex-col items-stretch gap-2 border-t-2 border-slate-100 bg-slate-50/80 px-5 py-4 sm:flex-row sm:items-center sm:justify-between"
                         role="status"
@@ -794,6 +833,66 @@ export default function PagosPage() {
           if (tab === "cobrados") fetchCobrados();
         }}
       />
+
+      {/* Anular cobro en efectivo (admin): borra el cobro y devuelve el saldo */}
+      {anularPago && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={() => !anulando && setAnularPago(null)} role="presentation">
+          <div className="w-full max-w-md rounded-xl bg-white p-6 shadow-xl" onClick={(e) => e.stopPropagation()} role="dialog" aria-modal="true">
+            <h3 className="mb-1 text-lg font-bold text-gray-800">Anular cobro en efectivo</h3>
+            <p className="mb-3 text-sm text-slate-600">
+              Factura <b>{anularPago.factura_numero}</b> — Gs. {anularPago.monto.toLocaleString("es-PY")} ({anularPago.cliente_nombre}).
+              El cobro se elimina de la lista y <b>el saldo vuelve a la factura</b>.
+            </p>
+            <label className={LABEL_CLS} htmlFor="anular-motivo">Motivo (mínimo 5 caracteres)</label>
+            <textarea
+              id="anular-motivo"
+              value={anularMotivo}
+              onChange={(e) => setAnularMotivo(e.target.value)}
+              className={INPUT_CLS}
+              rows={3}
+              placeholder="Ej.: cargado por error / el socio no pagó en efectivo"
+            />
+            {anularError && (
+              <p className="mt-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">{anularError}</p>
+            )}
+            <div className="mt-4 flex gap-3">
+              <button
+                type="button"
+                disabled={anulando || anularMotivo.trim().length < 5}
+                onClick={async () => {
+                  setAnulando(true);
+                  setAnularError(null);
+                  try {
+                    const res = await fetchWithSupabaseSession(`/api/pagos/${anularPago.id}/anular`, {
+                      method: "POST",
+                      headers: { "Content-Type": "application/json" },
+                      body: JSON.stringify({ motivo: anularMotivo.trim() }),
+                    });
+                    const j = (await res.json().catch(() => ({}))) as { success?: boolean; error?: string };
+                    if (!res.ok || j?.success !== true) {
+                      setAnularError(j?.error || "No se pudo anular el cobro.");
+                      return;
+                    }
+                    setAnularPago(null);
+                    getFacturas().then(setFacturas);
+                    fetchCobrados();
+                  } catch (err) {
+                    setAnularError(err instanceof Error ? err.message : "Error de red. Volvé a intentar.");
+                  } finally {
+                    setAnulando(false);
+                  }
+                }}
+                className="rounded-lg bg-red-600 px-4 py-2 text-sm font-medium text-white hover:bg-red-700 disabled:opacity-50"
+              >
+                {anulando ? "Anulando…" : "Anular cobro"}
+              </button>
+              <button type="button" disabled={anulando} onClick={() => setAnularPago(null)} className="rounded-lg border border-slate-200 px-4 py-2 text-sm hover:bg-slate-50 disabled:opacity-50">
+                Cancelar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
