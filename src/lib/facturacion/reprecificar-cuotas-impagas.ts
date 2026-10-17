@@ -30,6 +30,7 @@ type FacturaRow = {
   saldo: number | string | null;
   estado: string | null;
   tipo: string | null;
+  fecha?: string | null;
 };
 
 type ItemRow = {
@@ -44,6 +45,7 @@ type ItemRow = {
 
 export type ReprecificarResult = {
   dry_run: boolean;
+  desde: string | null;
   precio_viejo: number;
   precio_nuevo: number;
   candidatas: number;
@@ -62,14 +64,17 @@ export async function reprecificarCuotasImpagas(
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   supabase: any,
   auth: ReprecificarAuth,
-  opts: { dryRun: boolean; precioViejo?: number; precioNuevo?: number }
+  opts: { dryRun: boolean; precioViejo?: number; precioNuevo?: number; desdePeriodo?: string }
 ): Promise<ReprecificarResult> {
   const precioViejo = Number.isFinite(opts.precioViejo) ? Number(opts.precioViejo) : 25000;
   const precioNuevo = Number.isFinite(opts.precioNuevo) ? Number(opts.precioNuevo) : 30000;
   const factor = precioNuevo / precioViejo;
+  // Corte opcional: solo cuotas con fecha de emisión >= `${desdePeriodo}-01` (YYYY-MM).
+  const desdeFecha = /^\d{4}-\d{2}$/.test(opts.desdePeriodo ?? "") ? `${opts.desdePeriodo}-01` : null;
 
   const res: ReprecificarResult = {
     dry_run: opts.dryRun,
+    desde: desdeFecha,
     precio_viejo: precioViejo,
     precio_nuevo: precioNuevo,
     candidatas: 0,
@@ -86,12 +91,15 @@ export async function reprecificarCuotasImpagas(
   }
 
   // 1) Facturas con monto == precioViejo y saldo > 0 (impagas o parciales).
-  const { data: facData, error: errF } = await supabase
+  //    Con corte opcional por fecha de emisión (>= desdeFecha).
+  let fq = supabase
     .from("facturas")
-    .select("id, numero_factura, cliente_id, monto, saldo, estado, tipo")
+    .select("id, numero_factura, cliente_id, monto, saldo, estado, tipo, fecha")
     .eq("empresa_id", auth.empresa_id)
     .eq("monto", precioViejo)
     .gt("saldo", 0);
+  if (desdeFecha) fq = fq.gte("fecha", desdeFecha);
+  const { data: facData, error: errF } = await fq;
   if (errF) throw new Error(`No se pudieron leer facturas: ${errF.message}`);
   const cand = (facData ?? []) as FacturaRow[];
   res.candidatas = cand.length;
