@@ -38,12 +38,14 @@ export async function POST(request: NextRequest) {
     const aplicar = b.aplicar === true;
     const precioViejo = b.precio_viejo !== undefined ? Number(b.precio_viejo) : undefined;
     const precioNuevo = b.precio_nuevo !== undefined ? Number(b.precio_nuevo) : undefined;
+    const desdePeriodo = typeof b.desde_periodo === "string" ? b.desde_periodo.trim() : undefined;
 
     const supabase = await getFacturasServiceClientForEmpresa(auth.empresa_id);
     const result = await reprecificarCuotasImpagas(supabase, auth, {
       dryRun: !aplicar,
       precioViejo,
       precioNuevo,
+      desdePeriodo,
     });
     return NextResponse.json(successResponse(result));
   } catch (err) {
