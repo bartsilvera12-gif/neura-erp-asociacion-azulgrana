@@ -1,9 +1,9 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { CheckCircle2, MessageCircle, Printer } from "lucide-react";
+import { CheckCircle2, Loader2, MessageCircle, Printer } from "lucide-react";
 import { fetchWithSupabaseSession } from "@/lib/api/fetch-with-supabase-session";
-import { useFacturaSifenEstados } from "@/hooks/useFacturaSifenEstados";
+import { useEmisionSifenFactura } from "@/hooks/useEmisionSifenFactura";
 
 /**
  * Pantalla de éxito "¡Pago registrado!" (inspirada en el comprobante de venta de
@@ -67,8 +67,11 @@ export function PagoRegistradoExito({
     };
   }, [clienteId, telProp]);
 
-  const sifen = useFacturaSifenEstados(facturaId ? [facturaId] : []);
-  const sifenAprobado = !!facturaId && sifen[facturaId]?.estado_sifen === "aprobado";
+  // Emisión automática de la factura electrónica (estilo caja distribuidora jm):
+  // al mostrarse el cartel se emite el DE y se consulta la SET hasta que aprueba.
+  // El cobro ya quedó registrado; esto corre aparte, sin trabarlo.
+  const emision = useEmisionSifenFactura(facturaId ?? null, Boolean(facturaId));
+  const sifenAprobado = emision.estado === "aprobado";
 
   const digits = soloDigitosTel(tel);
   const waHref = digits ? `/dashboard/conversaciones?buscar=${encodeURIComponent(digits)}` : null;
@@ -152,6 +155,33 @@ export function PagoRegistradoExito({
         )}
         {waMsg ? (
           <p className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2.5 text-left text-xs text-slate-600">{waMsg}</p>
+        ) : null}
+
+        {/* Estado de la emisión de la factura electrónica (SIFEN), en vivo. */}
+        {emision.estado === "enviando" || emision.estado === "esperando" ? (
+          <div className="flex items-center gap-2 rounded-lg border border-sky-200 bg-sky-50 px-3 py-2.5 text-left">
+            <Loader2 className="h-4 w-4 shrink-0 animate-spin text-sky-600" />
+            <p className="text-xs text-sky-900">
+              {emision.estado === "enviando"
+                ? "Emitiendo la factura electrónica a la SET…"
+                : "Esperando la aprobación de la SET…"}
+            </p>
+          </div>
+        ) : emision.estado === "aprobado" ? (
+          <p className="flex items-center justify-center gap-1.5 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2.5 text-xs font-semibold text-emerald-800">
+            <CheckCircle2 className="h-4 w-4" />
+            Factura electrónica aprobada por la SET
+          </p>
+        ) : emision.estado === "demorado" ? (
+          <p className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2.5 text-left text-xs text-slate-600">
+            La SET está demorando. La factura quedó pendiente de aprobación; podés seguir y revisarla
+            más tarde desde el detalle de la factura.
+          </p>
+        ) : emision.estado === "rechazado" ? (
+          <p className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2.5 text-left text-xs text-amber-800">
+            La SET no aprobó la factura electrónica{emision.mensaje ? `: ${emision.mensaje}` : "."} Podés
+            regenerarla desde el detalle de la factura.
+          </p>
         ) : null}
 
         {/* Imprimir: solo si hay factura electrónica aprobada por la SET (KuDE). Las cuotas
