@@ -3,7 +3,6 @@ import { getTenantSupabaseFromAuth } from "@/lib/supabase/tenant-api";
 import { successResponse, errorResponse } from "@/lib/api/response";
 import { API_ERRORS } from "@/lib/api/errors";
 import { registrarPago } from "@/lib/pagos/registrar-pago";
-import { autoEmitirSifenEnPago } from "@/lib/facturacion/server/auto-emitir-sifen";
 import { etiquetaVisibleTipoServicio } from "@/lib/clientes/tipo-servicio-catalogo";
 import { nombreClienteDisplay } from "@/lib/clientes/display-name";
 
@@ -355,23 +354,11 @@ export async function POST(request: NextRequest) {
       return NextResponse.json(errorResponse(result.message), { status: result.status });
     }
 
-    // Emisión automática del documento electrónico a la SET (gateada por SIFEN_AUTO_EMITIR).
-    // Best-effort: si falla, el pago YA quedó registrado y la emisión se reintenta desde la
-    // factura; nunca tumba la respuesta del pago.
-    const facturaId =
-      typeof result.pago?.factura_id === "string"
-        ? result.pago.factura_id
-        : typeof (body as { factura_id?: unknown })?.factura_id === "string"
-          ? (body as { factura_id: string }).factura_id
-          : "";
-    const sifen = await autoEmitirSifenEnPago({
-      request,
-      supabase,
-      empresaId: auth.empresa_id,
-      facturaId,
-    });
-
-    return NextResponse.json(successResponse({ ...result.pago, sifen }));
+    // La factura electrónica (SIFEN) NO se emite acá: el cobro se confirma al
+    // instante y la emisión corre aparte desde el cartel de "Pago registrado"
+    // (POST /api/facturas/[id]/sifen/emitir + consulta de estado), igual que la
+    // caja de distribuidora jm. Así el cobro nunca queda esperando a la SET.
+    return NextResponse.json(successResponse(result.pago));
   } catch (err) {
     const msg = err instanceof Error ? err.message : "Error";
     return NextResponse.json(errorResponse(msg), { status: 500 });
