@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useCallback, useEffect, useState } from "react";
 import { fetchWithSupabaseSession } from "@/lib/api/fetch-with-supabase-session";
+import { enviarFacturaPorWhatsapp } from "@/lib/facturacion/enviar-factura-por-whatsapp";
 import { FacturaElectronicaPanel } from "@/components/sifen/FacturaElectronicaPanel";
 import { AnularFacturaButton } from "@/components/facturas/AnularFacturaButton";
 import type { FacturaElectronicaDTO, SifenCancelacionPreviewDTO } from "@/lib/sifen/types";
@@ -261,67 +262,13 @@ function EnviarWhatsappButton({ facturaId, disabled }: { facturaId: string; disa
     setBusy(true);
     setMsg(null);
     try {
-      // 1. Datos de envío: teléfono del socio, caption y URL del PDF (KuDE o recibo).
-      const res = await fetchWithSupabaseSession(`/api/facturas/${facturaId}/enviar-whatsapp`, {
-        method: "GET",
-      });
-      const j = (await res.json()) as {
-        success?: boolean;
-        error?: string;
-        data?: { wa_me_url?: string; pdf_url?: string; filename?: string; phone_e164?: string; caption?: string };
-      };
-      if (!res.ok || !j.success) {
-        setMsg({ kind: "err", text: j.error ?? `Error ${res.status}` });
+      const r = await enviarFacturaPorWhatsapp(facturaId);
+      if (!r.ok) {
+        setMsg({ kind: "err", text: r.error });
         return;
       }
-      const data = j.data ?? {};
-      const digits = (data.phone_e164 ?? "").replace(/\D/g, "");
-      if (!digits) {
-        setMsg({ kind: "err", text: "El socio no tiene teléfono cargado." });
-        return;
-      }
-      if (!data.pdf_url) {
-        setMsg({ kind: "err", text: "No se pudo generar el PDF de la factura." });
-        return;
-      }
-
-      // 2. Iniciar/reusar la conversación del socio (WhatsApp por QR).
-      const cr = await fetchWithSupabaseSession("/api/chat/start-conversation", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ to: digits }),
-      });
-      const cj = (await cr.json().catch(() => ({}))) as { ok?: boolean; conversation_id?: string; error?: string };
-      if (!cr.ok || !cj.ok || !cj.conversation_id) {
-        setMsg({ kind: "err", text: cj.error ?? "No se pudo iniciar la conversación." });
-        return;
-      }
-      const convId = cj.conversation_id;
-
-      // 3. Bajar el PDF y enviarlo al socio por el chat (puente WhatsApp QR).
-      const pdfRes = await fetchWithSupabaseSession(data.pdf_url, { method: "GET" });
-      if (!pdfRes.ok) {
-        setMsg({ kind: "err", text: "No se pudo descargar el PDF de la factura." });
-        return;
-      }
-      const blob = await pdfRes.blob();
-      const file = new File([blob], data.filename ?? "factura.pdf", { type: blob.type || "application/pdf" });
-      const fd = new FormData();
-      fd.append("conversation_id", convId);
-      fd.append("file", file);
-      if (data.caption) fd.append("caption", data.caption);
-      const sm = await fetchWithSupabaseSession("/api/chat/send-media", { method: "POST", body: fd });
-      const sj = (await sm.json().catch(() => ({}))) as { ok?: boolean; error?: string };
-      if (!sm.ok || !sj.ok) {
-        // La conversación quedó creada; abrimos el chat igual para reintentar a mano.
-        setMsg({ kind: "err", text: (sj.error ?? "No se pudo enviar la factura.") + " Abrí el chat y reintentá." });
-        router.push(`/dashboard/conversaciones?c=${encodeURIComponent(convId)}`);
-        return;
-      }
-
-      // 4. Enviada: abrimos el chat del socio para ver la factura enviada.
       setMsg({ kind: "ok", text: "Factura enviada por WhatsApp. Abriendo el chat…" });
-      router.push(`/dashboard/conversaciones?c=${encodeURIComponent(convId)}`);
+      router.push(`/dashboard/conversaciones?c=${encodeURIComponent(r.conversationId)}`);
     } catch (e) {
       setMsg({ kind: "err", text: e instanceof Error ? e.message : "Error de red" });
     } finally {
