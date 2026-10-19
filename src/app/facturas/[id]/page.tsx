@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useParams, useSearchParams } from "next/navigation";
+import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useCallback, useEffect, useState } from "react";
 import { fetchWithSupabaseSession } from "@/lib/api/fetch-with-supabase-session";
 import { FacturaElectronicaPanel } from "@/components/sifen/FacturaElectronicaPanel";
@@ -252,6 +252,7 @@ function FacturaDetalleInner() {
 }
 
 function EnviarWhatsappButton({ facturaId, disabled }: { facturaId: string; disabled?: boolean }) {
+  const router = useRouter();
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<{ kind: "ok" | "err"; text: string } | null>(null);
 
@@ -268,22 +269,34 @@ function EnviarWhatsappButton({ facturaId, disabled }: { facturaId: string; disa
         error?: string;
         data?: { wa_me_url?: string; pdf_url?: string; filename?: string; phone_e164?: string };
       };
-      if (!res.ok || !j.success || !j.data?.wa_me_url) {
+      if (!res.ok || !j.success) {
         setMsg({ kind: "err", text: j.error ?? `Error ${res.status}` });
         return;
       }
-      // 1. Bajar el PDF para que lo tengas listo para adjuntar en WhatsApp
-      if (j.data.pdf_url) {
+      const data = j.data ?? {};
+      // 1. Bajar el PDF para tenerlo listo para adjuntar en el chat del ERP.
+      if (data.pdf_url) {
         const a = document.createElement("a");
-        a.href = j.data.pdf_url;
-        a.download = j.data.filename ?? "factura.pdf";
+        a.href = data.pdf_url;
+        a.download = data.filename ?? "factura.pdf";
         document.body.appendChild(a);
         a.click();
         document.body.removeChild(a);
       }
-      // 2. Abrir chat de WhatsApp con el mensaje precargado
-      window.open(j.data.wa_me_url, "_blank", "noopener,noreferrer");
-      setMsg({ kind: "ok", text: `WhatsApp abierto. Adjuntá el PDF descargado.` });
+      // 2. Llevar al chat del cliente DENTRO del ERP (Conversaciones), no al
+      //    WhatsApp de afuera. Se abre filtrando por el teléfono del socio;
+      //    ahí adjuntás el PDF descargado (botón del clip) y lo enviás.
+      let digits = (data.phone_e164 ?? "").replace(/\D/g, "");
+      if (!digits && data.wa_me_url) {
+        const m = /wa\.me\/(\d+)/.exec(data.wa_me_url);
+        if (m) digits = m[1];
+      }
+      if (!digits) {
+        setMsg({ kind: "err", text: "El socio no tiene teléfono cargado para abrir el chat." });
+        return;
+      }
+      setMsg({ kind: "ok", text: "Te llevo al chat del socio. Adjuntá el PDF descargado y envialo." });
+      router.push(`/dashboard/conversaciones?buscar=${encodeURIComponent(digits)}`);
     } catch (e) {
       setMsg({ kind: "err", text: e instanceof Error ? e.message : "Error de red" });
     } finally {
@@ -302,7 +315,7 @@ function EnviarWhatsappButton({ facturaId, disabled }: { facturaId: string; disa
         title={
           disabled
             ? "No se puede enviar una factura anulada"
-            : "Abre WhatsApp con el chat del cliente y baja el PDF para adjuntar"
+            : "Abre el chat del socio en el ERP y baja el PDF para adjuntar y enviar"
         }
       >
         <svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor" aria-hidden>
