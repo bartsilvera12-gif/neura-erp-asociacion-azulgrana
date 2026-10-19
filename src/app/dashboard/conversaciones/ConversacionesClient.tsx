@@ -967,11 +967,16 @@ export function ConversacionesClient({
    * no es "la del aviso" y volver a abrirla sería una sorpresa.
    */
   const abrioDelAvisoRef = useRef(false);
+  /** Conversación abierta por deep-link `?c=` que todavía puede no estar en la lista
+   *  del inbox (p. ej. recién creada desde otro módulo): no se descarta la selección
+   *  hasta que el load del inbox la traiga. */
+  const pendingDeepLinkRef = useRef<string | null>(null);
   useEffect(() => {
     if (abrioDelAvisoRef.current) return;
     const pedida = new URLSearchParams(window.location.search).get("c");
     if (!pedida) return;
     abrioDelAvisoRef.current = true;
+    pendingDeepLinkRef.current = pedida;
     setSelectedId(pedida);
     const url = new URL(window.location.href);
     url.searchParams.delete("c");
@@ -2930,10 +2935,18 @@ export function ConversacionesClient({
   }, [transferFromUrl, requestedConversationId, selectedId, patchInboxQuery]);
 
   useEffect(() => {
-    if (selectedId && !conversations.some((c) => c.id === selectedId)) {
-      setSelectedId(null);
-      setMessages([]);
+    if (!selectedId) return;
+    if (conversations.some((c) => c.id === selectedId)) {
+      // Ya está en la lista: deep-link consumido.
+      pendingDeepLinkRef.current = null;
+      return;
     }
+    // No está en la lista. Si viene de un deep-link `?c=` recién abierto (p. ej. una
+    // conversación recién creada desde el botón de factura), NO descartamos la selección:
+    // esperamos a que el load del inbox la traiga y la abra.
+    if (selectedId === pendingDeepLinkRef.current) return;
+    setSelectedId(null);
+    setMessages([]);
   }, [conversations, selectedId]);
 
   useEffect(() => {
