@@ -355,17 +355,11 @@ export function buildOfficialRdeFacturaElectronicaXml(
   const refFirma = new Date(ahora.getTime() - SIFEN_FIRMA_SKEW_MS);
   const { ymd: emiYmd, hms: emiHms } = wallYmdAndHmsInSifenTz(refFirma);
 
-  // Guardarraíl de período fiscal: solo se emite dentro del MISMO mes que la fecha
-  // comercial de la factura. Cruzar de mes movería el DE a otro período de IVA.
-  {
-    const fYm = /^(\d{4})-(\d{2})/.exec(String(documento.fecha).trim());
-    const eYm = /^(\d{4})-(\d{2})/.exec(emiYmd);
-    if (fYm && eYm && (fYm[1] !== eYm[1] || fYm[2] !== eYm[2])) {
-      throw new Error(
-        `No se puede emitir a SET: la factura es del período ${fYm[1]}-${fYm[2]} y hoy es ${eYm[1]}-${eYm[2]}. La emisión electrónica debe caer en el mismo mes que la factura. Anulá y re-facturá en el mes actual.`
-      );
-    }
-  }
+  // El DE se emite SIEMPRE con la fecha de HOY (`emiYmd`), sin importar el período
+  // comercial de la factura (p. ej. cuotas de aporte adelantadas). Así toda factura
+  // recibe su documento electrónico real y nunca se queda con el recibo interno.
+  // (Antes había un guardarraíl que bloqueaba emitir fuera del mes de la factura;
+  //  se quitó a pedido de la asociación: la factura real manda sobre el período.)
 
   const fechaCdc = fechaEmisionCdc(emiYmd);
   /** Debe coincidir con `gEmis.iTipCont` y entrar en el CDC antes de la fecha (SET / TIPS). */
