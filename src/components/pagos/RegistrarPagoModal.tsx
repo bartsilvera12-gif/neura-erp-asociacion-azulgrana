@@ -164,6 +164,7 @@ export function RegistrarPagoModal({
             clienteId={factura.cliente_id}
             clienteNombre={factura.cliente_label ?? null}
             facturaId={factura.id}
+            facturaIds={seleccionadas.map((r) => r.fac.id)}
             mensaje={doneMsg}
             onListo={onClose}
           />
