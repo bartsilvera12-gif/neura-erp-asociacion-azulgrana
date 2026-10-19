@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { CheckCircle2, Loader2, MessageCircle, Printer } from "lucide-react";
 import { fetchWithSupabaseSession } from "@/lib/api/fetch-with-supabase-session";
@@ -33,6 +33,7 @@ export function PagoRegistradoExito({
   clienteTelefono,
   clienteNombre,
   facturaId,
+  facturaIds,
   mensaje,
   onListo,
 }: {
@@ -43,6 +44,9 @@ export function PagoRegistradoExito({
   clienteNombre?: string | null;
   /** Factura desde la que se cobró, para el botón Imprimir (KuDE). */
   facturaId?: string | null;
+  /** Todas las facturas cobradas en este pago (cobro en lote). Si viene, se emite
+   *  el DE y se manda por WhatsApp de TODAS; si no, se usa `facturaId` sola. */
+  facturaIds?: string[] | null;
   /** Texto informativo opcional (p. ej. "queda pendiente de aprobación…"). */
   mensaje?: string | null;
   onListo: () => void;
@@ -70,32 +74,77 @@ export function PagoRegistradoExito({
     };
   }, [clienteId, telProp]);
 
+  // Todas las facturas cobradas en este pago (sin repetir). La primera lleva la UI
+  // "rica" (emitiendo → aprobada); las demás se emiten igual, por detrás.
+  const allIds = useMemo(() => {
+    const base = facturaIds && facturaIds.length ? facturaIds : facturaId ? [facturaId] : [];
+    return [...new Set(base.filter(Boolean))] as string[];
+  }, [facturaIds, facturaId]);
+  const primaryId = allIds[0] ?? null;
+  const esLote = allIds.length > 1;
+
   // Emisión automática de la factura electrónica (estilo caja distribuidora jm):
   // al mostrarse el cartel se emite el DE y se consulta la SET hasta que aprueba.
   // El cobro ya quedó registrado; esto corre aparte, sin trabarlo.
-  const emision = useEmisionSifenFactura(facturaId ?? null, Boolean(facturaId));
+  const emision = useEmisionSifenFactura(primaryId, Boolean(primaryId));
   const sifenAprobado = emision.estado === "aprobado";
+
+  // Cobro en lote: además de la primera (que maneja el hook), emitir el DE de las
+  // demás facturas cobradas. Best-effort, por detrás (no bloquea ni muestra estado).
+  useEffect(() => {
+    const extra = allIds.slice(1);
+    if (extra.length === 0) return;
+    let cancel = false;
+    (async () => {
+      for (const id of extra) {
+        if (cancel) break;
+        try {
+          await fetchWithSupabaseSession(`/api/facturas/${id}/sifen/emitir`, { method: "POST" });
+        } catch {
+          /* best-effort: se puede reintentar desde el detalle de la factura */
+        }
+      }
+    })();
+    return () => {
+      cancel = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [allIds.join("|")]);
 
   const digits = soloDigitosTel(tel);
   const waHref = digits ? `/dashboard/conversaciones?buscar=${encodeURIComponent(digits)}` : null;
-  const kudeHref = sifenAprobado && facturaId ? `/api/facturas/${facturaId}/sifen/kude` : null;
+  const kudeHref = sifenAprobado && !esLote && primaryId ? `/api/facturas/${primaryId}/sifen/kude` : null;
 
   // Enviar la factura por WhatsApp DESDE el ERP (no abre WhatsApp de afuera):
   // manda el PDF al socio por el puente y abre el chat de la conversación.
   const [waBusy, setWaBusy] = useState(false);
   const [waMsg, setWaMsg] = useState<string | null>(null);
   async function enviarFacturaWhatsapp() {
-    if (!facturaId) return;
+    if (allIds.length === 0) return;
     setWaBusy(true);
     setWaMsg(null);
     try {
-      const r = await enviarFacturaPorWhatsapp(facturaId);
-      if (!r.ok) {
-        setWaMsg(r.error);
+      let convId: string | null = null;
+      let okCount = 0;
+      let primerError: string | null = null;
+      // Manda TODAS las facturas cobradas al mismo socio (misma conversación).
+      for (const id of allIds) {
+        const r = await enviarFacturaPorWhatsapp(id);
+        if (r.ok) {
+          okCount += 1;
+          convId = r.conversationId;
+        } else if (!primerError) {
+          primerError = r.error;
+        }
+      }
+      if (okCount === 0) {
+        setWaMsg(primerError ?? "No se pudo enviar la factura.");
         return;
       }
-      setWaMsg("Factura enviada por WhatsApp. Abriendo el chat…");
-      router.push(`/dashboard/conversaciones?c=${encodeURIComponent(r.conversationId)}`);
+      const txt =
+        okCount === 1 ? "Factura enviada por WhatsApp." : `${okCount} facturas enviadas por WhatsApp.`;
+      setWaMsg(`${txt} Abriendo el chat…`);
+      if (convId) router.push(`/dashboard/conversaciones?c=${encodeURIComponent(convId)}`);
     } catch (e) {
       setWaMsg(e instanceof Error ? e.message : "Error de red. Volvé a intentar.");
     } finally {
@@ -118,7 +167,7 @@ export function PagoRegistradoExito({
       ) : null}
 
       <div className="space-y-2">
-        {facturaId ? (
+        {allIds.length > 0 ? (
           <button
             type="button"
             onClick={enviarFacturaWhatsapp}
@@ -126,7 +175,7 @@ export function PagoRegistradoExito({
             className="flex w-full items-center justify-center gap-2 rounded-xl bg-emerald-600 py-3 text-sm font-semibold text-white hover:bg-emerald-700 disabled:opacity-60"
           >
             <MessageCircle className="h-4 w-4" />
-            {waBusy ? "Preparando…" : "Enviar factura por WhatsApp"}
+            {waBusy ? "Enviando…" : esLote ? "Enviar facturas por WhatsApp" : "Enviar factura por WhatsApp"}
           </button>
         ) : waHref ? (
           <a
