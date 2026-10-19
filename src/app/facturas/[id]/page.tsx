@@ -261,60 +261,67 @@ function EnviarWhatsappButton({ facturaId, disabled }: { facturaId: string; disa
     setBusy(true);
     setMsg(null);
     try {
+      // 1. Datos de envío: teléfono del socio, caption y URL del PDF (KuDE o recibo).
       const res = await fetchWithSupabaseSession(`/api/facturas/${facturaId}/enviar-whatsapp`, {
         method: "GET",
       });
       const j = (await res.json()) as {
         success?: boolean;
         error?: string;
-        data?: { wa_me_url?: string; pdf_url?: string; filename?: string; phone_e164?: string };
+        data?: { wa_me_url?: string; pdf_url?: string; filename?: string; phone_e164?: string; caption?: string };
       };
       if (!res.ok || !j.success) {
         setMsg({ kind: "err", text: j.error ?? `Error ${res.status}` });
         return;
       }
       const data = j.data ?? {};
-      // 1. Bajar el PDF para tenerlo listo para adjuntar en el chat del ERP.
-      if (data.pdf_url) {
-        const a = document.createElement("a");
-        a.href = data.pdf_url;
-        a.download = data.filename ?? "factura.pdf";
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
-      }
-      // 2. Abrir el chat del socio DENTRO del ERP (Conversaciones), no el
-      //    WhatsApp de afuera. Iniciamos/reusamos la conversación para entrar
-      //    DIRECTO al chat (aunque el socio nunca haya escrito antes); ahí
-      //    adjuntás el PDF descargado (botón del clip) y lo enviás.
-      let digits = (data.phone_e164 ?? "").replace(/\D/g, "");
-      if (!digits && data.wa_me_url) {
-        const m = /wa\.me\/(\d+)/.exec(data.wa_me_url);
-        if (m) digits = m[1];
-      }
+      const digits = (data.phone_e164 ?? "").replace(/\D/g, "");
       if (!digits) {
-        setMsg({ kind: "err", text: "El socio no tiene teléfono cargado para abrir el chat." });
+        setMsg({ kind: "err", text: "El socio no tiene teléfono cargado." });
         return;
       }
-      setMsg({ kind: "ok", text: "Abriendo el chat del socio. Adjuntá el PDF descargado y envialo." });
-      try {
-        const cr = await fetchWithSupabaseSession("/api/chat/start-conversation", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ to: digits }),
-        });
-        const cj = (await cr.json().catch(() => ({}))) as { ok?: boolean; conversation_id?: string; error?: string };
-        if (cr.ok && cj.ok && cj.conversation_id) {
-          router.push(`/dashboard/conversaciones?c=${encodeURIComponent(cj.conversation_id)}`);
-          return;
-        }
-        // Si no se pudo iniciar (p. ej. sin canal de WhatsApp por QR), al menos
-        // filtramos por el teléfono para encontrarlo en el inbox.
-        setMsg({ kind: "err", text: cj.error ?? "No se pudo abrir el chat; te dejo el buscador." });
-        router.push(`/dashboard/conversaciones?buscar=${encodeURIComponent(digits)}`);
-      } catch {
-        router.push(`/dashboard/conversaciones?buscar=${encodeURIComponent(digits)}`);
+      if (!data.pdf_url) {
+        setMsg({ kind: "err", text: "No se pudo generar el PDF de la factura." });
+        return;
       }
+
+      // 2. Iniciar/reusar la conversación del socio (WhatsApp por QR).
+      const cr = await fetchWithSupabaseSession("/api/chat/start-conversation", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ to: digits }),
+      });
+      const cj = (await cr.json().catch(() => ({}))) as { ok?: boolean; conversation_id?: string; error?: string };
+      if (!cr.ok || !cj.ok || !cj.conversation_id) {
+        setMsg({ kind: "err", text: cj.error ?? "No se pudo iniciar la conversación." });
+        return;
+      }
+      const convId = cj.conversation_id;
+
+      // 3. Bajar el PDF y enviarlo al socio por el chat (puente WhatsApp QR).
+      const pdfRes = await fetchWithSupabaseSession(data.pdf_url, { method: "GET" });
+      if (!pdfRes.ok) {
+        setMsg({ kind: "err", text: "No se pudo descargar el PDF de la factura." });
+        return;
+      }
+      const blob = await pdfRes.blob();
+      const file = new File([blob], data.filename ?? "factura.pdf", { type: blob.type || "application/pdf" });
+      const fd = new FormData();
+      fd.append("conversation_id", convId);
+      fd.append("file", file);
+      if (data.caption) fd.append("caption", data.caption);
+      const sm = await fetchWithSupabaseSession("/api/chat/send-media", { method: "POST", body: fd });
+      const sj = (await sm.json().catch(() => ({}))) as { ok?: boolean; error?: string };
+      if (!sm.ok || !sj.ok) {
+        // La conversación quedó creada; abrimos el chat igual para reintentar a mano.
+        setMsg({ kind: "err", text: (sj.error ?? "No se pudo enviar la factura.") + " Abrí el chat y reintentá." });
+        router.push(`/dashboard/conversaciones?c=${encodeURIComponent(convId)}`);
+        return;
+      }
+
+      // 4. Enviada: abrimos el chat del socio para ver la factura enviada.
+      setMsg({ kind: "ok", text: "Factura enviada por WhatsApp. Abriendo el chat…" });
+      router.push(`/dashboard/conversaciones?c=${encodeURIComponent(convId)}`);
     } catch (e) {
       setMsg({ kind: "err", text: e instanceof Error ? e.message : "Error de red" });
     } finally {
@@ -339,7 +346,7 @@ function EnviarWhatsappButton({ facturaId, disabled }: { facturaId: string; disa
         <svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor" aria-hidden>
           <path d="M20.5 3.5A11 11 0 0 0 3.4 17.2L2 22l4.9-1.3A11 11 0 1 0 20.5 3.5Zm-8.4 17a9 9 0 0 1-4.6-1.3l-.3-.2-2.9.8.8-2.8-.2-.3a9 9 0 1 1 7.2 3.8Zm5.1-6.7c-.3-.1-1.6-.8-1.9-.9-.3-.1-.5-.1-.7.1-.2.3-.7.9-.9 1.1-.2.2-.3.2-.6.1a7.4 7.4 0 0 1-3.7-3.2c-.3-.5.3-.5.8-1.6.1-.2 0-.3 0-.5 0-.1-.7-1.6-.9-2.2-.2-.6-.5-.5-.7-.5H8c-.2 0-.5.1-.7.3-.3.3-.9 1-.9 2.3 0 1.4 1 2.7 1.1 2.9.1.2 1.9 3 4.7 4.2 2.8 1.2 2.8.8 3.3.7.5-.1 1.6-.7 1.8-1.3.2-.6.2-1.2.2-1.3-.1-.1-.3-.2-.6-.3Z"/>
         </svg>
-        {busy ? "Abriendo…" : "WhatsApp"}
+        {busy ? "Enviando…" : "WhatsApp"}
       </button>
       {msg ? (
         <div

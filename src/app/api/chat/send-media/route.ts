@@ -5,6 +5,8 @@ import { markFirstHumanOperatorReply } from "@/lib/chat/conversation-sla-markers
 import { getAuthWithRol } from "@/lib/middleware/auth";
 import {
   resolveOutboundTextContextFromIds,
+  resolveBaileysContextFromIds,
+  sendMediaViaBaileysBridge,
   type ChannelOutboundTextContext,
 } from "@/lib/chat/outbound-send-dispatch";
 import {
@@ -211,13 +213,23 @@ export async function POST(request: NextRequest) {
 
     const empresaId = conv.empresa_id;
 
-    let outboundCtx: ChannelOutboundTextContext;
+    // WhatsApp por QR (Baileys): se resuelve aparte y se envía por el puente.
+    // Si el canal NO es baileys, seguimos por el camino Meta/YCloud de siempre.
+    let baileysCtx: { toDigits: string; bridgeUrl: string } | null = null;
+    let outboundCtx: ChannelOutboundTextContext | null = null;
     try {
-      outboundCtx = await resolveOutboundTextContextFromIds(
+      baileysCtx = await resolveBaileysContextFromIds(
         supabase,
         { contactId: conv.contact_id, channelId: conv.channel_id },
         { dataSchema, empresaId }
       );
+      if (!baileysCtx) {
+        outboundCtx = await resolveOutboundTextContextFromIds(
+          supabase,
+          { contactId: conv.contact_id, channelId: conv.channel_id },
+          { dataSchema, empresaId }
+        );
+      }
     } catch (e) {
       const msg = e instanceof Error ? e.message : "Datos de envío incompletos";
       let status = 400;
@@ -227,12 +239,12 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ ok: false, error: msg }, { status });
     }
 
-    const toDigits = outboundCtx.toDigits;
-    const provider = outboundCtx.provider;
-    const ycloudApiKey = provider === "ycloud" ? outboundCtx.apiKey : "";
-    const ycloudFromE164 = provider === "ycloud" ? outboundCtx.fromE164 : null;
-    const phoneNumberId = provider === "meta" ? outboundCtx.phoneNumberId : null;
-    const token = provider === "meta" ? outboundCtx.accessToken : null;
+    const toDigits = baileysCtx ? baileysCtx.toDigits : outboundCtx!.toDigits;
+    const provider: "meta" | "ycloud" | "baileys" = baileysCtx ? "baileys" : outboundCtx!.provider;
+    const ycloudApiKey = provider === "ycloud" ? outboundCtx!.apiKey : "";
+    const ycloudFromE164 = provider === "ycloud" ? outboundCtx!.fromE164 : null;
+    const phoneNumberId = provider === "meta" ? outboundCtx!.phoneNumberId : null;
+    const token = provider === "meta" ? outboundCtx!.accessToken : null;
 
     if (!toDigits) {
       return NextResponse.json({ ok: false, error: "Falta teléfono del contacto" }, { status: 400 });
@@ -347,7 +359,16 @@ export async function POST(request: NextRequest) {
     let sendResult: SendWhatsAppTextResult;
     let outboundMessageType: "image" | "document" | "audio" | "video";
 
-    if (provider === "ycloud") {
+    if (provider === "baileys") {
+      // WhatsApp por QR: el archivo va como base64 al puente (/send-media).
+      outboundMessageType = isImage ? "image" : isAudio ? "audio" : isVideo ? "video" : "document";
+      sendResult = await sendMediaViaBaileysBridge(
+        baileysCtx!.bridgeUrl,
+        toDigits,
+        { buffer: buf, filename: origName, mimetype: uploadMime },
+        caption || undefined
+      );
+    } else if (provider === "ycloud") {
       if (isImage) {
         outboundMessageType = "image";
         sendResult = await sendYCloudWhatsappMediaViaLink({
