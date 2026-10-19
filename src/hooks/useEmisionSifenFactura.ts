@@ -31,6 +31,8 @@ type Respuesta = {
   error?: string;
   data?: {
     sifen_activo?: boolean;
+    /** Factura que no se puede emitir (p. ej. sin líneas de detalle): no mostrar nada. */
+    no_emitible?: boolean;
     factura_id?: string;
     estado_sifen?: string | null;
     error?: string | null;
@@ -55,6 +57,11 @@ export function useEmisionSifenFactura(facturaId: string | null, habilitado: boo
     if (d.cdc) setCdc(d.cdc);
     if (ok && d.sifen_activo === false) {
       setEstado("inactivo");
+      return "fin";
+    }
+    if (ok && d.no_emitible) {
+      // Factura sin líneas (cuota vieja/importada): no es electrónica, no mostrar nada.
+      setEstado("no_disponible");
       return "fin";
     }
     const e = d.estado_sifen ?? null;

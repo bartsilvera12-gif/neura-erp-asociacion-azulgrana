@@ -42,6 +42,20 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
       return NextResponse.json(successResponse({ sifen_activo: false }));
     }
 
+    // Las cuotas viejas/importadas sin líneas de detalle (factura_items) no se pueden
+    // armar como documento electrónico. No creamos un borrador trucho que después falla:
+    // devolvemos `no_emitible` y el front no muestra nada de SIFEN.
+    const { count: itemsCount } = await supabase
+      .from("factura_items")
+      .select("id", { count: "exact", head: true })
+      .eq("factura_id", facturaId)
+      .eq("empresa_id", auth.empresa_id);
+    if (!itemsCount || itemsCount < 1) {
+      return NextResponse.json(
+        successResponse({ sifen_activo: true, factura_id: facturaId, no_emitible: true, estado_sifen: null })
+      );
+    }
+
     const antes = await estadoSifen(supabase, auth.empresa_id, facturaId);
     for (const paso of pasosPendientes(antes.estado_sifen)) {
       const r = await correrPaso(request, facturaId, paso);
