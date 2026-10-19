@@ -695,6 +695,7 @@ export default function PagosPage() {
                       "Método",
                       "Usuario",
                       "Fecha y hora",
+                      "Mensaje",
                       ...(isAdmin ? ["Acción"] : []),
                     ].map(
                       (h) => (
@@ -750,6 +751,12 @@ export default function PagosPage() {
                       <td className="min-w-[6rem] px-3 py-3 text-sm text-slate-500 sm:px-4 [overflow-wrap:anywhere] break-words">
                         {formatFechaHora(p.fecha_registro)}
                       </td>
+                      <td
+                        className="min-w-[10rem] max-w-[18rem] px-3 py-3 text-sm text-slate-600 sm:px-4 [overflow-wrap:anywhere] break-words"
+                        title={p.referencia ?? ""}
+                      >
+                        {p.referencia?.trim() ? p.referencia : <span className="text-slate-300">—</span>}
+                      </td>
                       {isAdmin && (
                         <td className="whitespace-nowrap px-3 py-3 text-right last:pr-5 sm:px-4">
                           {p.metodo_pago === "efectivo" ? (
@@ -777,7 +784,7 @@ export default function PagosPage() {
                 </tbody>
                 <tfoot>
                   <tr>
-                    <td colSpan={isAdmin ? 9 : 8} className="p-0">
+                    <td colSpan={isAdmin ? 10 : 9} className="p-0">
                       <div
                         className="flex w-full min-w-0 flex-col items-stretch gap-2 border-t-2 border-slate-100 bg-slate-50/80 px-5 py-4 sm:flex-row sm:items-center sm:justify-between"
                         role="status"
