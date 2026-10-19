@@ -3262,6 +3262,7 @@ export default function ClienteDetalleClient({
                     monto: montoNum,
                     fecha_pago: formPago.fecha_pago,
                     metodo_pago: "efectivo",
+                    referencia: formPago.referencia.trim() || undefined,
                   }),
                 });
                 const j = (await res.json().catch(() => ({}))) as { success?: boolean; error?: string };
@@ -3301,6 +3302,17 @@ export default function ClienteDetalleClient({
               <div>
                 <label className={labelClass}>Fecha del cobro</label>
                 <input type="date" value={formPago.fecha_pago} onChange={(e) => setFormPago((p) => ({ ...p, fecha_pago: e.target.value }))} className={inputClass} required />
+              </div>
+              <div>
+                <label className={labelClass}>Mensaje (opcional)</label>
+                <textarea
+                  value={formPago.referencia}
+                  onChange={(e) => setFormPago((p) => ({ ...p, referencia: e.target.value }))}
+                  rows={2}
+                  maxLength={300}
+                  placeholder="Ej.: pagó adelantado, dejó seña, etc."
+                  className={inputClass}
+                />
               </div>
               {errorPago && <p className="text-sm text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">{errorPago}</p>}
               <div className="flex gap-3 pt-2">
