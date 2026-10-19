@@ -1,8 +1,10 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 import { CheckCircle2, Loader2, MessageCircle, Printer } from "lucide-react";
 import { fetchWithSupabaseSession } from "@/lib/api/fetch-with-supabase-session";
+import { enviarFacturaPorWhatsapp } from "@/lib/facturacion/enviar-factura-por-whatsapp";
 import { useEmisionSifenFactura } from "@/hooks/useEmisionSifenFactura";
 
 /**
@@ -45,6 +47,7 @@ export function PagoRegistradoExito({
   mensaje?: string | null;
   onListo: () => void;
 }) {
+  const router = useRouter();
   // El teléfono que nos pasó el caller manda; si no vino, lo "estiramos" del cliente.
   const telProp = clienteTelefono ?? "";
   const [telBuscado, setTelBuscado] = useState<string>("");
@@ -77,8 +80,8 @@ export function PagoRegistradoExito({
   const waHref = digits ? `/dashboard/conversaciones?buscar=${encodeURIComponent(digits)}` : null;
   const kudeHref = sifenAprobado && facturaId ? `/api/facturas/${facturaId}/sifen/kude` : null;
 
-  // Enviar la factura por WhatsApp: baja el PDF (KuDE si hay SIFEN, si no el PDF
-  // de factura interna) y abre el chat del socio con el mensaje precargado.
+  // Enviar la factura por WhatsApp DESDE el ERP (no abre WhatsApp de afuera):
+  // manda el PDF al socio por el puente y abre el chat de la conversación.
   const [waBusy, setWaBusy] = useState(false);
   const [waMsg, setWaMsg] = useState<string | null>(null);
   async function enviarFacturaWhatsapp() {
@@ -86,26 +89,13 @@ export function PagoRegistradoExito({
     setWaBusy(true);
     setWaMsg(null);
     try {
-      const res = await fetchWithSupabaseSession(`/api/facturas/${facturaId}/enviar-whatsapp`, { cache: "no-store" });
-      const j = (await res.json().catch(() => ({}))) as {
-        success?: boolean;
-        error?: string;
-        data?: { wa_me_url?: string; pdf_url?: string; filename?: string };
-      };
-      if (!res.ok || !j.success || !j.data?.wa_me_url) {
-        setWaMsg(j.error || "No se pudo preparar el envío.");
+      const r = await enviarFacturaPorWhatsapp(facturaId);
+      if (!r.ok) {
+        setWaMsg(r.error);
         return;
       }
-      if (j.data.pdf_url) {
-        const a = document.createElement("a");
-        a.href = j.data.pdf_url;
-        a.download = j.data.filename || "factura.pdf";
-        document.body.appendChild(a);
-        a.click();
-        a.remove();
-      }
-      window.open(j.data.wa_me_url, "_blank", "noopener,noreferrer");
-      setWaMsg("Se bajó la factura y se abrió WhatsApp. Adjuntala en el chat y enviala. 📎");
+      setWaMsg("Factura enviada por WhatsApp. Abriendo el chat…");
+      router.push(`/dashboard/conversaciones?c=${encodeURIComponent(r.conversationId)}`);
     } catch (e) {
       setWaMsg(e instanceof Error ? e.message : "Error de red. Volvé a intentar.");
     } finally {
