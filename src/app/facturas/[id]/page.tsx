@@ -283,9 +283,10 @@ function EnviarWhatsappButton({ facturaId, disabled }: { facturaId: string; disa
         a.click();
         document.body.removeChild(a);
       }
-      // 2. Llevar al chat del cliente DENTRO del ERP (Conversaciones), no al
-      //    WhatsApp de afuera. Se abre filtrando por el teléfono del socio;
-      //    ahí adjuntás el PDF descargado (botón del clip) y lo enviás.
+      // 2. Abrir el chat del socio DENTRO del ERP (Conversaciones), no el
+      //    WhatsApp de afuera. Iniciamos/reusamos la conversación para entrar
+      //    DIRECTO al chat (aunque el socio nunca haya escrito antes); ahí
+      //    adjuntás el PDF descargado (botón del clip) y lo enviás.
       let digits = (data.phone_e164 ?? "").replace(/\D/g, "");
       if (!digits && data.wa_me_url) {
         const m = /wa\.me\/(\d+)/.exec(data.wa_me_url);
@@ -295,8 +296,25 @@ function EnviarWhatsappButton({ facturaId, disabled }: { facturaId: string; disa
         setMsg({ kind: "err", text: "El socio no tiene teléfono cargado para abrir el chat." });
         return;
       }
-      setMsg({ kind: "ok", text: "Te llevo al chat del socio. Adjuntá el PDF descargado y envialo." });
-      router.push(`/dashboard/conversaciones?buscar=${encodeURIComponent(digits)}`);
+      setMsg({ kind: "ok", text: "Abriendo el chat del socio. Adjuntá el PDF descargado y envialo." });
+      try {
+        const cr = await fetchWithSupabaseSession("/api/chat/start-conversation", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ to: digits }),
+        });
+        const cj = (await cr.json().catch(() => ({}))) as { ok?: boolean; conversation_id?: string; error?: string };
+        if (cr.ok && cj.ok && cj.conversation_id) {
+          router.push(`/dashboard/conversaciones?c=${encodeURIComponent(cj.conversation_id)}`);
+          return;
+        }
+        // Si no se pudo iniciar (p. ej. sin canal de WhatsApp por QR), al menos
+        // filtramos por el teléfono para encontrarlo en el inbox.
+        setMsg({ kind: "err", text: cj.error ?? "No se pudo abrir el chat; te dejo el buscador." });
+        router.push(`/dashboard/conversaciones?buscar=${encodeURIComponent(digits)}`);
+      } catch {
+        router.push(`/dashboard/conversaciones?buscar=${encodeURIComponent(digits)}`);
+      }
     } catch (e) {
       setMsg({ kind: "err", text: e instanceof Error ? e.message : "Error de red" });
     } finally {
