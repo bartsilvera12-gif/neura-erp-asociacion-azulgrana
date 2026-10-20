@@ -513,6 +513,70 @@ export default function ClienteDetalleClient({
    *  para tenants erp_* no expuestos) y el botón parecía "no hacer nada". Ahora exponemos el motivo. */
   const [errorFacturaContado, setErrorFacturaContado] = useState<string | null>(null);
 
+  // "Facturar adelantado": genera las cuotas de la suscripción desde el mes actual
+  // hasta el mes elegido (usa /api/clientes/[id]/facturacion/emitir por mes, que no
+  // duplica: si el mes ya existe, lo saltea). Sirve para cobrar por adelantado.
+  const [modalAdelantar, setModalAdelantar] = useState(false);
+  const [mesHastaAdelantar, setMesHastaAdelantar] = useState<string>("");
+  const [adelantarBusy, setAdelantarBusy] = useState(false);
+  const [adelantarMsg, setAdelantarMsg] = useState<{ kind: "ok" | "err"; text: string } | null>(null);
+
+  async function facturarAdelantado() {
+    setAdelantarMsg(null);
+    if (!/^\d{4}-\d{2}$/.test(mesHastaAdelantar)) {
+      setAdelantarMsg({ kind: "err", text: "Elegí hasta qué mes querés facturar." });
+      return;
+    }
+    const hoy = new Date();
+    const desde = `${hoy.getFullYear()}-${String(hoy.getMonth() + 1).padStart(2, "0")}`;
+    if (mesHastaAdelantar < desde) {
+      setAdelantarMsg({ kind: "err", text: "El mes tiene que ser el actual o uno futuro." });
+      return;
+    }
+    // Lista de meses desde el actual hasta el elegido (máx 24 por seguridad).
+    const meses: string[] = [];
+    let [y, m] = desde.split("-").map(Number);
+    for (let i = 0; i < 24; i++) {
+      const mm = `${y}-${String(m).padStart(2, "0")}`;
+      meses.push(mm);
+      if (mm === mesHastaAdelantar) break;
+      m += 1;
+      if (m > 12) { m = 1; y += 1; }
+    }
+    setAdelantarBusy(true);
+    let creadas = 0;
+    let existentes = 0;
+    const errores: string[] = [];
+    try {
+      for (const mes of meses) {
+        const res = await fetchWithSupabaseSession(`/api/clientes/${id}/facturacion/emitir`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ mes }),
+        });
+        const j = (await res.json().catch(() => ({}))) as { success?: boolean; error?: string };
+        if (res.ok && j.success) creadas += 1;
+        else if ((j.error ?? "").toLowerCase().includes("ya existe")) existentes += 1;
+        else errores.push(`${mes}: ${j.error ?? "error"}`);
+      }
+      await getFacturas(id).then(setFacturas);
+      if (creadas === 0 && errores.length > 0) {
+        setAdelantarMsg({ kind: "err", text: errores[0] });
+      } else {
+        const partes = [
+          `${creadas} ${creadas === 1 ? "cuota generada" : "cuotas generadas"}`,
+          existentes > 0 ? `${existentes} ya existían` : "",
+          errores.length > 0 ? `${errores.length} con error` : "",
+        ].filter(Boolean);
+        setAdelantarMsg({ kind: "ok", text: `${partes.join(" · ")}. Ya podés cobrarlas.` });
+      }
+    } catch (e) {
+      setAdelantarMsg({ kind: "err", text: e instanceof Error ? e.message : "Error de red." });
+    } finally {
+      setAdelantarBusy(false);
+    }
+  }
+
   const sifenPorFactura = useFacturaSifenEstados(facturas.map((f) => f.id));
   const suscripcionActiva = useMemo(
     () => suscripciones.find((s) => s.estado === "activa") ?? null,
@@ -2342,6 +2406,17 @@ export default function ClienteDetalleClient({
                   <button
                     type="button"
                     onClick={() => {
+                      setMesHastaAdelantar("");
+                      setAdelantarMsg(null);
+                      setModalAdelantar(true);
+                    }}
+                    className="text-sm font-medium border border-[#4FAEB2] bg-[#4FAEB2]/10 text-[#3F8E91] hover:bg-[#4FAEB2]/20 px-3 py-1.5 rounded-lg"
+                  >
+                    Facturar adelantado
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
                       const conSaldo = facturas.filter((f) => f.saldo > 0);
                       const primera = conSaldo[0];
                       setFacturaPago(null);
@@ -2759,6 +2834,48 @@ export default function ClienteDetalleClient({
         </div>
         </div>
       </div>
+
+      {/* Modal "Facturar adelantado": genera cuotas de la suscripción hasta el mes elegido */}
+      {modalAdelantar && (
+        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4" onClick={() => !adelantarBusy && setModalAdelantar(false)}>
+          <div className="bg-white rounded-xl shadow-xl max-w-md w-full p-6" onClick={(e) => e.stopPropagation()}>
+            <h3 className="text-lg font-bold text-gray-800 mb-1">Facturar adelantado</h3>
+            <p className="text-xs text-slate-500 mb-4">
+              Genera las cuotas de la suscripción <b>desde este mes hasta el mes que elijas</b> (no duplica: si un mes ya existe, lo saltea). Después las cobrás normalmente.
+            </p>
+            <label className={labelClass}>Facturar hasta el mes</label>
+            <input
+              type="month"
+              value={mesHastaAdelantar}
+              onChange={(e) => setMesHastaAdelantar(e.target.value)}
+              className={inputClass}
+            />
+            {adelantarMsg && (
+              <p className={`mt-3 text-sm rounded-lg px-3 py-2 border ${adelantarMsg.kind === "ok" ? "text-emerald-800 bg-emerald-50 border-emerald-200" : "text-amber-800 bg-amber-50 border-amber-200"}`}>
+                {adelantarMsg.text}
+              </p>
+            )}
+            <div className="flex gap-3 pt-4">
+              <button
+                type="button"
+                onClick={() => void facturarAdelantado()}
+                disabled={adelantarBusy}
+                className="bg-[#4FAEB2] hover:bg-[#3F8E91] text-white px-4 py-2 rounded-lg text-sm font-medium disabled:opacity-50"
+              >
+                {adelantarBusy ? "Generando…" : "Facturar"}
+              </button>
+              <button
+                type="button"
+                onClick={() => setModalAdelantar(false)}
+                disabled={adelantarBusy}
+                className="border border-slate-200 px-4 py-2 rounded-lg text-sm hover:bg-slate-50 disabled:opacity-50"
+              >
+                Cerrar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Modal factura al contado (nueva compra sin suscripción) */}
       {modalFacturaContado && cliente && (
