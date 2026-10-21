@@ -89,22 +89,50 @@ export function PagoRegistradoExito({
   const emision = useEmisionSifenFactura(primaryId, Boolean(primaryId));
   const sifenAprobado = emision.estado === "aprobado";
 
-  // Cobro en lote: además de la primera (que maneja el hook), emitir el DE de las
-  // demás facturas cobradas. Best-effort, por detrás (no bloquea ni muestra estado).
+  // Cobro en lote: además de la primera (que maneja el hook con UI en vivo), las
+  // demás facturas cobradas también se emiten Y se consultan hasta que la SET las
+  // apruebe (mismo circuito que la primera: emitir → preguntar estado cada pocos
+  // segundos). Antes solo se llamaba a `emitir`, que las deja en "enviado"; faltaba
+  // consultar el estado, por eso el usuario tenía que terminar "Generar y enviar" a
+  // mano. Corre por detrás, best-effort y en paralelo por factura (no bloquea el cobro).
   useEffect(() => {
     const extra = allIds.slice(1);
     if (extra.length === 0) return;
     let cancel = false;
-    (async () => {
-      for (const id of extra) {
-        if (cancel) break;
-        try {
-          await fetchWithSupabaseSession(`/api/facturas/${id}/sifen/emitir`, { method: "POST" });
-        } catch {
-          /* best-effort: se puede reintentar desde el detalle de la factura */
+
+    const CADA_MS = 4000;
+    const INTENTOS = 30; // ≈ 2 min, igual que el hook de la primera
+    const espera = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
+
+    /** estado_sifen del body; "fin" si no corresponde emitir (SIFEN inactivo / sin líneas). */
+    const leerEstado = (j: unknown): string | null => {
+      const d = ((j as { data?: Record<string, unknown> } | null)?.data ?? {}) as Record<string, unknown>;
+      if (d.sifen_activo === false || d.no_emitible === true) return "fin";
+      return (d.estado_sifen as string | null | undefined) ?? null;
+    };
+
+    const FINALES = new Set(["aprobado", "rechazado", "cancelado", "fin"]);
+
+    async function emitirYConfirmar(id: string): Promise<void> {
+      try {
+        const resE = await fetchWithSupabaseSession(`/api/facturas/${id}/sifen/emitir`, { method: "POST" });
+        const jE = await resE.json().catch(() => ({}));
+        let est = resE.ok ? leerEstado(jE) : "fin";
+        for (let i = 0; i < INTENTOS && !cancel && est != null && !FINALES.has(est); i++) {
+          await espera(CADA_MS);
+          if (cancel) return;
+          const resS = await fetchWithSupabaseSession(`/api/facturas/${id}/sifen/estado`, { method: "POST" });
+          const jS = await resS.json().catch(() => ({}));
+          est = resS.ok ? leerEstado(jS) : est;
         }
+      } catch {
+        /* best-effort: se puede reintentar desde el detalle de la factura */
       }
-    })();
+    }
+
+    // En paralelo por factura para no encadenar los ~2 min de espera una tras otra.
+    void Promise.all(extra.map((id) => emitirYConfirmar(id)));
+
     return () => {
       cancel = true;
     };
