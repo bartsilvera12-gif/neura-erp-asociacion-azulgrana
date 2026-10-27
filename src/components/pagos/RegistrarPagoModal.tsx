@@ -54,6 +54,8 @@ export function RegistrarPagoModal({
   const [guardando, setGuardando] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [doneMsg, setDoneMsg] = useState<string | null>(null);
+  /** Si se cobraron 2+ cuotas y se consolidaron, es la factura "portadora" (una sola factura electrónica). */
+  const [consolidadoCarrierId, setConsolidadoCarrierId] = useState<string | null>(null);
 
   const cargarFacturas = useCallback(async (clienteId: string) => {
     setCargando(true);
@@ -80,6 +82,7 @@ export function RegistrarPagoModal({
     setFechaPago(hoyYmdLocal());
     setErrorMsg(null);
     setDoneMsg(null);
+    setConsolidadoCarrierId(null);
     void cargarFacturas(factura.cliente_id);
   }, [open, factura?.cliente_id, cargarFacturas]);
 
@@ -138,10 +141,33 @@ export function RegistrarPagoModal({
         return;
       }
     }
+    // Cobro de 2+ cuotas juntas → consolidar en UNA sola factura electrónica
+    // (una línea por mes). Si falla, se cae al modo anterior (una factura por mes).
+    let carrier: string | null = null;
+    if (seleccionadas.length >= 2) {
+      try {
+        const resC = await apiFetch("/api/facturas/consolidar", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ factura_ids: seleccionadas.map((r) => r.fac.id) }),
+        });
+        const jC = (await resC.json().catch(() => ({}))) as {
+          success?: boolean;
+          data?: { carrier_id?: string };
+          error?: string;
+        };
+        if (resC.ok && jC?.success && jC.data?.carrier_id) carrier = jC.data.carrier_id;
+      } catch {
+        /* best-effort: sin consolidar, cada mes emite su propia factura */
+      }
+    }
+    setConsolidadoCarrierId(carrier);
     setGuardando(false);
     await Promise.resolve(onExito());
     setDoneMsg(
-      `${okCount} ${okCount === 1 ? "factura cobrada" : "facturas cobradas"} en efectivo. El saldo ya se actualizó.`
+      carrier
+        ? `${okCount} cuotas cobradas y unificadas en una sola factura electrónica. El saldo ya se actualizó.`
+        : `${okCount} ${okCount === 1 ? "factura cobrada" : "facturas cobradas"} en efectivo. El saldo ya se actualizó.`
     );
   }
 
@@ -163,8 +189,8 @@ export function RegistrarPagoModal({
           <PagoRegistradoExito
             clienteId={factura.cliente_id}
             clienteNombre={factura.cliente_label ?? null}
-            facturaId={factura.id}
-            facturaIds={seleccionadas.map((r) => r.fac.id)}
+            facturaId={consolidadoCarrierId ?? factura.id}
+            facturaIds={consolidadoCarrierId ? [consolidadoCarrierId] : seleccionadas.map((r) => r.fac.id)}
             mensaje={doneMsg}
             onListo={onClose}
           />
