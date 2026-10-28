@@ -77,6 +77,10 @@ export interface Cliente {
   numero_socio?: number | null;
   /** Categoría de socio: 'SOCIO FUNDADOR' | 'ACTIVO' | 'RESERVADO' | otro slug definido por la asociación. */
   tipo_socio?: string | null;
+  /** Fecha de nacimiento del socio (YYYY-MM-DD). Para saludos de cumpleaños y datos. */
+  fecha_nacimiento?: string | null;
+  /** Fecha real en que ingresó a la asociación (YYYY-MM-DD). Se usa como "socio desde". */
+  fecha_asociacion?: string | null;
 
   /** Usuario que creó el cliente (auth.users.id) */
   created_by_user_id?:   string | null;

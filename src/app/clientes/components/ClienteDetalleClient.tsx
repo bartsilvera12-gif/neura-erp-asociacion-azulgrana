@@ -365,6 +365,8 @@ export default function ClienteDetalleClient({
     project_manager_id:    "",
     numero_socio:          "" as string,
     tipo_socio:            "" as string,
+    fecha_nacimiento:      "" as string,
+    fecha_asociacion:      "" as string,
     estado:                "activo" as Cliente["estado"],
     sifen_receptor_manual: false,
     sifen_receptor_naturaleza: "" as string,
@@ -636,6 +638,8 @@ export default function ClienteDetalleClient({
         project_manager_id:   c.project_manager_id  ?? "",
         numero_socio:         c.numero_socio != null ? String(c.numero_socio) : "",
         tipo_socio:           c.tipo_socio ?? "",
+        fecha_nacimiento:     c.fecha_nacimiento ? String(c.fecha_nacimiento).slice(0, 10) : "",
+        fecha_asociacion:     c.fecha_asociacion ? String(c.fecha_asociacion).slice(0, 10) : "",
         estado:               c.estado,
         sifen_receptor_manual: Boolean(c.sifen_receptor_manual),
         sifen_receptor_naturaleza: c.sifen_receptor_naturaleza ?? "",
@@ -978,6 +982,8 @@ export default function ClienteDetalleClient({
         project_manager_id:  form.project_manager_id.trim() || null,
         numero_socio:        form.numero_socio.trim() === "" ? null : Math.max(1, parseInt(form.numero_socio, 10) || 0) || null,
         tipo_socio:          form.tipo_socio.trim() || null,
+        fecha_nacimiento:    form.fecha_nacimiento.trim() || null,
+        fecha_asociacion:    form.fecha_asociacion.trim() || null,
         estado:              form.estado,
         ...sifenManualPayload,
       });
@@ -1329,9 +1335,9 @@ export default function ClienteDetalleClient({
                     </span>
                   )}
                   <span className="text-[11px] text-slate-500">
-                    Cliente desde{" "}
+                    {cliente.fecha_asociacion ? "Socio desde" : "Cliente desde"}{" "}
                     <span className="font-medium text-slate-700">
-                      {formatFecha(cliente.created_at)}
+                      {formatFecha(cliente.fecha_asociacion ?? cliente.created_at)}
                     </span>
                   </span>
                 </div>
@@ -1890,6 +1896,30 @@ export default function ClienteDetalleClient({
                       <option value="ACTIVO">ACTIVO</option>
                       <option value="RESERVADO">RESERVADO</option>
                     </select>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div>
+                    <label className={labelClass}>Fecha de nacimiento</label>
+                    <input
+                      type="date"
+                      name="fecha_nacimiento"
+                      value={form.fecha_nacimiento}
+                      onChange={(e) => setForm((prev) => ({ ...prev, fecha_nacimiento: e.target.value }))}
+                      className={inputClass}
+                    />
+                  </div>
+                  <div>
+                    <label className={labelClass}>Fecha de asociación</label>
+                    <input
+                      type="date"
+                      name="fecha_asociacion"
+                      value={form.fecha_asociacion}
+                      onChange={(e) => setForm((prev) => ({ ...prev, fecha_asociacion: e.target.value }))}
+                      className={inputClass}
+                    />
+                    <p className="mt-1 text-xs text-slate-500">Se muestra como “socio desde”.</p>
                   </div>
                 </div>
 

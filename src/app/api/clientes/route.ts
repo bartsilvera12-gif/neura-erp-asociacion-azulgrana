@@ -255,7 +255,16 @@ export async function POST(request: NextRequest) {
       vendedor_usuario_id,
       numero_socio,
       tipo_socio,
+      fecha_nacimiento,
+      fecha_asociacion,
     } = body;
+
+    /** Normaliza una fecha a 'YYYY-MM-DD' o null (acepta solo ese formato). */
+    const normFecha = (v: unknown): string | null => {
+      if (typeof v !== "string") return null;
+      const s = v.trim();
+      return /^\d{4}-\d{2}-\d{2}$/.test(s) ? s : null;
+    };
 
     const uuidRe = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
     const planComercial =
@@ -375,6 +384,8 @@ export async function POST(request: NextRequest) {
         return Number.isFinite(n) && n > 0 ? Math.floor(n) : null;
       })(),
       tipo_socio:           typeof tipo_socio === "string" && tipo_socio.trim() ? tipo_socio.trim() : null,
+      fecha_nacimiento:     normFecha(fecha_nacimiento),
+      fecha_asociacion:     normFecha(fecha_asociacion),
     };
 
     if (typeof sifen_receptor_extranjero === "boolean") {

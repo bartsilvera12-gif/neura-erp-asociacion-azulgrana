@@ -120,6 +120,8 @@ export async function apiCreateCliente(data: {
   sifen_descripcion_tipo_doc?: string | null;
   numero_socio?: number | null;
   tipo_socio?: string | null;
+  fecha_nacimiento?: string | null;
+  fecha_asociacion?: string | null;
 }): Promise<
   | { ok: true; data: { id: string; [key: string]: unknown } }
   | { ok: false; error: string; code?: string; hay_inactivo?: boolean; matches?: DuplicadoMatchClient[] }
