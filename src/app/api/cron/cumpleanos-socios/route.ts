@@ -38,8 +38,8 @@ function primerNombre(nombre: string | null | undefined): string {
 }
 
 function mensajeCumple(nombre: string): string {
-  const quien = nombre ? `, ${nombre}` : "";
-  return `¡Feliz cumpleaños${quien}! 🎉🎂 La Asociación Hernandarias Azulgrana te desea un día espectacular. ¡Gracias por ser parte! 💙`;
+  const quien = nombre ? `${nombre}, ` : "";
+  return `${quien}La Asociación Hernandarias Azulgrana te desea un feliz cumpleaños y gracias por ser parte ❤️💙`;
 }
 
 function schemaSeguro(): string {
