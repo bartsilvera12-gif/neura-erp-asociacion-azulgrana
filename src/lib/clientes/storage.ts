@@ -15,6 +15,8 @@ interface SupabaseRow {
   tipo_servicio_cliente:   string | null;
   numero_socio:            number | string | null;
   tipo_socio:              string | null;
+  fecha_nacimiento:        string | null;
+  fecha_asociacion:        string | null;
   created_by_user_id:      string | null;
   created_by_nombre:       string | null;
   deleted_at:              string | null;
@@ -129,6 +131,8 @@ function rowToCliente(row: SupabaseRow): Cliente {
       return Number.isFinite(n) ? n : null;
     })(),
     tipo_socio:          row.tipo_socio == null || String(row.tipo_socio).trim() === "" ? null : String(row.tipo_socio).trim(),
+    fecha_nacimiento:    row.fecha_nacimiento ? String(row.fecha_nacimiento).slice(0, 10) : null,
+    fecha_asociacion:    row.fecha_asociacion ? String(row.fecha_asociacion).slice(0, 10) : null,
     created_by_user_id:  row.created_by_user_id ?? undefined,
     created_by_nombre:   row.created_by_nombre ?? undefined,
     deleted_at:          row.deleted_at ?? undefined,
@@ -314,6 +318,8 @@ export async function saveCliente(datos: NuevoClienteData): Promise<Cliente | nu
     estado:             datos.estado ?? "activo",
     numero_socio:       datos.numero_socio ?? null,
     tipo_socio:         datos.tipo_socio ?? null,
+    fecha_nacimiento:   datos.fecha_nacimiento ?? null,
+    fecha_asociacion:   datos.fecha_asociacion ?? null,
   };
   if (datos.sifen_receptor_extranjero === true) insert.sifen_receptor_extranjero = true;
   if (datos.sifen_receptor_extranjero === false) insert.sifen_receptor_extranjero = false;
@@ -508,6 +514,13 @@ export function construirPatchActualizacionCliente(datos: ActualizarClienteInput
     const t = datos.tipo_socio == null ? "" : String(datos.tipo_socio).trim();
     patch.tipo_socio = t ? t : null;
   }
+  const normFechaSocio = (v: unknown): string | null => {
+    if (typeof v !== "string") return null;
+    const s = v.trim();
+    return /^\d{4}-\d{2}-\d{2}$/.test(s) ? s : null;
+  };
+  if (datos.fecha_nacimiento !== undefined) patch.fecha_nacimiento = normFechaSocio(datos.fecha_nacimiento);
+  if (datos.fecha_asociacion !== undefined) patch.fecha_asociacion = normFechaSocio(datos.fecha_asociacion);
   patch.updated_at = new Date().toISOString();
   return patch;
 }

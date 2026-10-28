@@ -119,6 +119,8 @@ function ClienteNuevoFormInner({ variant = "page", onCreated, onCancel, fromPros
     prospecto_id: null as string | null,
     numero_socio: "" as string,
     tipo_socio: "" as string,
+    fecha_nacimiento: "" as string,
+    fecha_asociacion: "" as string,
     estado: "activo" as "activo" | "inactivo",
     sifen_receptor_manual: false,
     sifen_receptor_naturaleza: "" as string,
@@ -454,6 +456,8 @@ function ClienteNuevoFormInner({ variant = "page", onCreated, onCancel, fromPros
       vendedor_usuario_id: form.vendedor_usuario_id.trim() || null,
       numero_socio: form.numero_socio.trim() === "" ? null : Math.max(1, parseInt(form.numero_socio, 10) || 0) || null,
       tipo_socio: form.tipo_socio.trim() || null,
+      fecha_nacimiento: form.fecha_nacimiento.trim() || null,
+      fecha_asociacion: form.fecha_asociacion.trim() || null,
       ...sifenManualCreate,
     });
 
@@ -660,6 +664,31 @@ function ClienteNuevoFormInner({ variant = "page", onCreated, onCancel, fromPros
                   <option value="ACTIVO">ACTIVO</option>
                   <option value="RESERVADO">RESERVADO</option>
                 </select>
+              </div>
+            </div>
+
+            {/* Fechas del socio: nacimiento (cumpleaños) y asociación ("socio desde") */}
+            <div className="grid gap-4 sm:grid-cols-2">
+              <div>
+                <label className={labelClass}>Fecha de nacimiento</label>
+                <input
+                  type="date"
+                  name="fecha_nacimiento"
+                  value={form.fecha_nacimiento}
+                  onChange={(e) => setForm((prev) => ({ ...prev, fecha_nacimiento: e.target.value }))}
+                  className={inputClass}
+                />
+              </div>
+              <div>
+                <label className={labelClass}>Fecha de asociación</label>
+                <input
+                  type="date"
+                  name="fecha_asociacion"
+                  value={form.fecha_asociacion}
+                  onChange={(e) => setForm((prev) => ({ ...prev, fecha_asociacion: e.target.value }))}
+                  className={inputClass}
+                />
+                <p className="mt-1 text-xs text-slate-500">Fecha real en que ingresó. Se muestra como “socio desde”.</p>
               </div>
             </div>
 
