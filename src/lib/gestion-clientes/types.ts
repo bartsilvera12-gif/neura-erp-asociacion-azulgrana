@@ -66,4 +66,6 @@ export interface Factura {
   moneda:            "GS" | "USD";
   /** Última fecha de pago registrada en `pagos` (GET /api/facturas enriquecido). */
   fecha_pago_registro?: string | null;
+  /** Si está consolidada en otra factura (cobro de varios meses juntos), id de la factura portadora. */
+  consolidada_en_factura_id?: string | null;
 }
