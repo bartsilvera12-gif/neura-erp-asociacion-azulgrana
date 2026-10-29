@@ -25,6 +25,7 @@ interface FacturaRow {
   tipo: string;
   moneda: string;
   fecha_pago_registro?: string | null;
+  consolidada_en_factura_id?: string | null;
 }
 
 interface TipificacionRow {
@@ -57,6 +58,7 @@ function rowToFactura(row: FacturaRow): Factura {
     tipo: row.tipo as Factura["tipo"],
     moneda: row.moneda as Factura["moneda"],
     fecha_pago_registro: fp,
+    consolidada_en_factura_id: row.consolidada_en_factura_id ?? null,
   };
 }
 

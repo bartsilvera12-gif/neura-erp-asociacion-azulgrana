@@ -5,10 +5,18 @@ import type { Factura } from "./types";
  * - `Corregida NC` en BD o saldo 0 con `Pendiente` (p. ej. antes de migración) → no se muestra como pendiente de cobro.
  * - Mora operativa: saldo > 0 y vencimiento calendario < hoy → `Vencido`.
  */
-export function estadoFacturaParaUi(f: Pick<Factura, "estado" | "saldo" | "fecha_vencimiento">, hoyYmd: string): string {
+export function estadoFacturaParaUi(
+  f: Pick<Factura, "estado" | "saldo" | "fecha_vencimiento"> & { consolidada_en_factura_id?: string | null },
+  hoyYmd: string
+): string {
   const est = String(f.estado ?? "").trim();
   const saldo = Number(f.saldo);
   const fv = (f.fecha_vencimiento ?? "").toString().trim().slice(0, 10);
+
+  // Cuota pagada dentro de una factura consolidada (varios meses en una sola factura):
+  // internamente queda "Anulado" para no duplicar montos, pero se muestra como pagada
+  // (está incluida en la factura portadora), no como anulada.
+  if (f.consolidada_en_factura_id) return "Consolidada";
 
   if (est === "Anulado") return "Anulado";
   if (est === "Pagado") return "Pagado";
@@ -28,6 +36,7 @@ export function estadoFacturaParaUi(f: Pick<Factura, "estado" | "saldo" | "fecha
 export function clasesBadgeEstadoFacturaUi(estadoUi: string): string {
   switch (estadoUi) {
     case "Pagado":
+    case "Consolidada":
       return "bg-green-100 text-green-700";
     case "Vencido":
       return "bg-red-100 text-red-700";
@@ -41,5 +50,7 @@ export function clasesBadgeEstadoFacturaUi(estadoUi: string): string {
 }
 
 export function textoBadgeEstadoFacturaUi(estadoUi: string): string {
-  return estadoUi === "Corregida NC" ? "Corregida (NC SET)" : estadoUi;
+  if (estadoUi === "Corregida NC") return "Corregida (NC SET)";
+  if (estadoUi === "Consolidada") return "Pagado";
+  return estadoUi;
 }

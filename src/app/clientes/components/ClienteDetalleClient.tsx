@@ -2492,12 +2492,23 @@ export default function ClienteDetalleClient({
                           <td className="px-4 py-3">
                             {(() => {
                               const estUi = estadoFacturaParaUi(f, hoyYmdFactura);
+                              const carrier = f.consolidada_en_factura_id
+                                ? facturas.find((x) => x.id === f.consolidada_en_factura_id)
+                                : null;
+                              const miembros = facturas.filter((x) => x.consolidada_en_factura_id === f.id);
                               return (
-                                <span
-                                  className={`text-xs font-medium px-2 py-0.5 rounded-full ${clasesBadgeEstadoFacturaUi(estUi)}`}
-                                >
-                                  {textoBadgeEstadoFacturaUi(estUi)}
-                                </span>
+                                <div className="space-y-1">
+                                  <span
+                                    className={`inline-block text-xs font-medium px-2 py-0.5 rounded-full ${clasesBadgeEstadoFacturaUi(estUi)}`}
+                                  >
+                                    {textoBadgeEstadoFacturaUi(estUi)}
+                                  </span>
+                                  {carrier ? (
+                                    <p className="text-[10px] text-slate-500">incluida en {carrier.numero_factura}</p>
+                                  ) : miembros.length > 0 ? (
+                                    <p className="text-[10px] text-slate-500">incluye {miembros.length + 1} meses</p>
+                                  ) : null}
+                                </div>
                               );
                             })()}
                           </td>
