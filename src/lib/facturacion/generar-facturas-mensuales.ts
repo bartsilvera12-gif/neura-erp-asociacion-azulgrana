@@ -1,6 +1,6 @@
 import "server-only";
 import type { AppSupabaseClient } from "@/lib/supabase/schema";
-import { montosFacturaItemParaInsert } from "./factura-item-montos";
+import { montosFacturaItemParaInsert, tasaIvaDesdeIvaTipo } from "./factura-item-montos";
 import { obtenerSiguienteNumeroFacturaEmpresa } from "./factura-suscripcion-servidor";
 import { vencimientoPeriodo } from "@/lib/fechas/calendario";
 
@@ -152,14 +152,19 @@ export async function generarFacturasMensuales(opts: {
 
   // 3) Planes (nombre para descripción + fallback de monto)
   const planIds = [...new Set(suscripciones.map((s) => String(s.plan_id ?? "")).filter(Boolean))];
-  const planMap = new Map<string, { nombre: string | null; precio: number }>();
+  const planMap = new Map<string, { nombre: string | null; precio: number; iva_tipo: string | null }>();
   if (planIds.length > 0) {
     const planData = await fetchInChunks(planIds, async (slice) => {
-      const { data } = await supabase.from("planes").select("id, nombre, precio").in("id", slice);
+      // select("*") (no "iva_tipo" explícito) por resiliencia si la columna aún no existe en el schema.
+      const { data } = await supabase.from("planes").select("*").in("id", slice);
       return (data ?? []) as Record<string, unknown>[];
     });
     for (const p of planData) {
-      planMap.set(String(p.id), { nombre: (p.nombre as string) ?? null, precio: Number(p.precio) || 0 });
+      planMap.set(String(p.id), {
+        nombre: (p.nombre as string) ?? null,
+        precio: Number(p.precio) || 0,
+        iva_tipo: (p.iva_tipo as string) ?? null,
+      });
     }
   }
 
@@ -251,9 +256,11 @@ export async function generarFacturasMensuales(opts: {
       // Concepto = nombre del plan (fuente natural del servicio). Ya NO se usa el
       // `tipo_servicio` de la suscripción (modelo unificado: el tipo vive en el cliente,
       // no en la suscripción/plan). Fallback genérico "Suscripción" si no hay plan.
-      const planNombre =
-        (s.plan_id ? planMap.get(String(s.plan_id))?.nombre : null) || "Suscripción";
-      const linea = montosFacturaItemParaInsert({ totalLinea: monto, moneda, cantidad: 1, precioUnitario: monto });
+      const planInfo = s.plan_id ? planMap.get(String(s.plan_id)) : null;
+      const planNombre = planInfo?.nombre || "Suscripción";
+      // IVA: lo define el plan (exenta | iva_5 | iva_10). Sin plan → 10% (histórico).
+      const tasaIva = tasaIvaDesdeIvaTipo(planInfo?.iva_tipo ?? undefined);
+      const linea = montosFacturaItemParaInsert({ totalLinea: monto, moneda, cantidad: 1, precioUnitario: monto, tasaIva });
       const { error: iErr } = await supabase.from("factura_items").insert({
         factura_id: (factura as { id: string }).id,
         empresa_id: empresaId,

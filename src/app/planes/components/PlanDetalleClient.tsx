@@ -127,6 +127,7 @@ export default function PlanDetalleClient({
     precio: "",
     moneda: "GS" as "GS" | "USD",
     periodicidad: "mensual" as "mensual" | "anual" | "unico",
+    iva_tipo: "iva_10" as "exenta" | "iva_5" | "iva_10",
     limite_usuarios: "",
     limite_clientes: "",
     limite_facturas: "",
@@ -155,6 +156,7 @@ export default function PlanDetalleClient({
           precio: String(p.precio),
           moneda: p.moneda,
           periodicidad: p.periodicidad,
+          iva_tipo: p.iva_tipo,
           limite_usuarios: p.limite_usuarios !== null ? String(p.limite_usuarios) : "",
           limite_clientes: p.limite_clientes !== null ? String(p.limite_clientes) : "",
           limite_facturas: p.limite_facturas !== null ? String(p.limite_facturas) : "",
@@ -215,6 +217,7 @@ export default function PlanDetalleClient({
         precio: parseFloat(form.precio),
         moneda: form.moneda,
         periodicidad: form.periodicidad,
+        iva_tipo: form.iva_tipo,
         limite_usuarios: form.limite_usuarios ? parseInt(form.limite_usuarios, 10) : null,
         limite_clientes: form.limite_clientes ? parseInt(form.limite_clientes, 10) : null,
         limite_facturas: form.limite_facturas ? parseInt(form.limite_facturas, 10) : null,
@@ -481,6 +484,22 @@ export default function PlanDetalleClient({
                     { value: "unico", label: "Único" },
                   ]}
                 />
+              </div>
+              <div>
+                <label className={fLabelClass}>IVA de las facturas</label>
+                <FancySelect
+                  ariaLabel="IVA de las facturas"
+                  value={form.iva_tipo}
+                  onChange={(v) => setField("iva_tipo", v as "exenta" | "iva_5" | "iva_10")}
+                  options={[
+                    { value: "iva_10", label: "IVA 10%" },
+                    { value: "iva_5", label: "IVA 5%" },
+                    { value: "exenta", label: "Exenta (sin IVA)" },
+                  ]}
+                />
+                <p className="mt-1 text-xs text-slate-400">
+                  Cuota social / aporte de socio: elegí <b>Exenta</b>.
+                </p>
               </div>
             </div>
           </SectionCard>

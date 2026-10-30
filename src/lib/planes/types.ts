@@ -2,6 +2,9 @@ export type Periodicidad  = "mensual" | "anual" | "unico";
 export type MonedaPlan    = "GS" | "USD";
 export type EstadoPlan    = "activo" | "inactivo";
 
+/** Tratamiento de IVA de las facturas del plan. La cuota social (aporte) va exenta. */
+export type IvaTipoPlan   = "exenta" | "iva_5" | "iva_10";
+
 /** Item de plantilla operativa para planes de marketing */
 export interface PlanMarketingItem {
   tipo_contenido: "post" | "reel" | "historia" | "anuncio" | "otro";
@@ -26,6 +29,9 @@ export interface Plan {
   moneda:           MonedaPlan;
 
   periodicidad:     Periodicidad;
+
+  /** Tratamiento de IVA de las facturas del plan: exenta | iva_5 | iva_10 (default iva_10). */
+  iva_tipo:         IvaTipoPlan;
 
   limite_usuarios:  number | null;   // null = ilimitado
   limite_clientes:  number | null;
