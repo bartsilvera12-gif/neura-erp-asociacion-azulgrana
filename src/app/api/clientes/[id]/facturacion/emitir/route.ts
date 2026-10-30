@@ -3,7 +3,7 @@ import { getFacturasSupabaseFromAuth } from "@/lib/facturacion/facturas-service-
 import { successResponse, errorResponse } from "@/lib/api/response";
 import { API_ERRORS } from "@/lib/api/errors";
 import { emitEvent, EVENT_TYPES } from "@/lib/integrations/events";
-import { montosFacturaItemParaInsert } from "@/lib/facturacion/factura-item-montos";
+import { montosFacturaItemParaInsert, tasaIvaDesdeIvaTipo } from "@/lib/facturacion/factura-item-montos";
 import { obtenerSiguienteNumeroFacturaEmpresa } from "@/lib/facturacion/factura-suscripcion-servidor";
 import { aplicarPlanPendienteSiVencido } from "@/lib/facturacion/suscripcion-plan-pendiente";
 import { fechaVencimientoSuscripcion } from "@/lib/fechas/calendario";
@@ -131,19 +131,25 @@ export async function POST(
     }
 
     let planNombre = "Suscripción";
+    // IVA: lo define el plan (exenta | iva_5 | iva_10). Sin plan → 10% (histórico).
+    let tasaIva = tasaIvaDesdeIvaTipo(undefined);
     if (susUso.plan_id) {
+      // select("*") (no "iva_tipo" explícito) por resiliencia si la columna aún no existe en el schema.
       const { data: plan } = await supabase
         .from("planes")
-        .select("nombre")
+        .select("*")
         .eq("id", susUso.plan_id)
         .maybeSingle();
-      if (plan?.nombre) planNombre = plan.nombre;
+      const planRow = plan as { nombre?: string; iva_tipo?: string } | null;
+      if (planRow?.nombre) planNombre = planRow.nombre;
+      if (planRow) tasaIva = tasaIvaDesdeIvaTipo(planRow.iva_tipo);
     }
     const linea = montosFacturaItemParaInsert({
       totalLinea: monto,
       moneda,
       cantidad: 1,
       precioUnitario: monto,
+      tasaIva,
     });
     const { error: errItem } = await supabase.from("factura_items").insert({
       factura_id: factura.id,

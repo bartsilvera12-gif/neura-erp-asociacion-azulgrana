@@ -7,6 +7,7 @@ import type { AppSupabaseClient } from "@/lib/supabase/schema";
 const PERIODICIDAD = new Set(["mensual", "anual", "unico"]);
 const MONEDA = new Set(["GS", "USD"]);
 const ESTADO = new Set(["activo", "inactivo"]);
+const IVA_TIPO = new Set(["exenta", "iva_5", "iva_10"]);
 
 async function nextCodigoPlan(supabase: AppSupabaseClient, empresaId: string): Promise<string> {
   const { data } = await supabase
@@ -104,6 +105,12 @@ export async function POST(request: NextRequest) {
       return NextResponse.json(errorResponse("estado inválido."), { status: 400 });
     }
 
+    // IVA del plan (opcional): define la tasa de las facturas del plan. Default iva_10.
+    const ivaTipo = typeof body.iva_tipo === "string" ? body.iva_tipo.trim().toLowerCase() : "iva_10";
+    if (!IVA_TIPO.has(ivaTipo)) {
+      return NextResponse.json(errorResponse("iva_tipo inválido: use 'exenta', 'iva_5' o 'iva_10'."), { status: 400 });
+    }
+
     const descripcion =
       typeof body.descripcion === "string" && body.descripcion.trim() ? body.descripcion.trim() : null;
 
@@ -123,6 +130,7 @@ export async function POST(request: NextRequest) {
       precio,
       moneda,
       periodicidad,
+      iva_tipo: ivaTipo,
       limite_usuarios: lim(body.limite_usuarios),
       limite_clientes: lim(body.limite_clientes),
       limite_facturas: lim(body.limite_facturas),

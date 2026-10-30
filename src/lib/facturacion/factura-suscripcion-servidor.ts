@@ -2,7 +2,7 @@
  * Emisión de factura de suscripción desde rutas API (sin localStorage / getCurrentUser).
  */
 import type { AppSupabaseClient } from "@/lib/supabase/schema";
-import { montosFacturaItemParaInsert } from "./factura-item-montos";
+import { montosFacturaItemParaInsert, tasaIvaDesdeIvaTipo } from "./factura-item-montos";
 import { emitEvent, EVENT_TYPES } from "@/lib/integrations/events";
 import { fechaVencimientoSuscripcion, vencimientoPeriodo, toCalendarDateStr, hoyYmdLocal } from "@/lib/fechas/calendario";
 import { aplicarPlanPendienteSiVencido } from "./suscripcion-plan-pendiente";
@@ -167,13 +167,19 @@ export async function crearFacturaInicialSuscripcionSiCorresponde(opts: {
   }
 
   let planNombre = "Suscripción";
+  // IVA: lo define el plan (exenta | iva_5 | iva_10). Sin plan → 10% (comportamiento histórico).
+  let tasaIva = tasaIvaDesdeIvaTipo(undefined);
   if (sRow.plan_id) {
+    // select("*") (no "iva_tipo" explícito) para no romper si la columna aún no existe
+    // en el schema (deploy antes de la migración): en ese caso iva_tipo = undefined → 10%.
     const { data: plan } = await supabase
       .from("planes")
-      .select("nombre")
+      .select("*")
       .eq("id", sRow.plan_id)
       .maybeSingle();
-    if (plan?.nombre) planNombre = plan.nombre;
+    const planRow = plan as { nombre?: string; iva_tipo?: string } | null;
+    if (planRow?.nombre) planNombre = planRow.nombre;
+    if (planRow) tasaIva = tasaIvaDesdeIvaTipo(planRow.iva_tipo);
   }
 
   const linea = montosFacturaItemParaInsert({
@@ -181,6 +187,7 @@ export async function crearFacturaInicialSuscripcionSiCorresponde(opts: {
     moneda,
     cantidad: 1,
     precioUnitario: monto,
+    tasaIva,
   });
 
   const { error: errItem } = await supabase.from("factura_items").insert({

@@ -81,6 +81,13 @@ export async function PATCH(
     }
     if (typeof body.moneda === "string") patch.moneda = body.moneda.trim().toUpperCase();
     if (typeof body.periodicidad === "string") patch.periodicidad = body.periodicidad.trim().toLowerCase();
+    if (body.iva_tipo !== undefined) {
+      const iva = typeof body.iva_tipo === "string" ? body.iva_tipo.trim().toLowerCase() : "";
+      if (!["exenta", "iva_5", "iva_10"].includes(iva)) {
+        return NextResponse.json(errorResponse("iva_tipo inválido: use 'exenta', 'iva_5' o 'iva_10'."), { status: 400 });
+      }
+      patch.iva_tipo = iva;
+    }
     if (body.limite_usuarios !== undefined) {
       patch.limite_usuarios =
         body.limite_usuarios === null || body.limite_usuarios === ""

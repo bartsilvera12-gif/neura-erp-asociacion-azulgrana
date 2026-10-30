@@ -1,6 +1,12 @@
 import { fetchWithSupabaseSession } from "@/lib/api/fetch-with-supabase-session";
 import { getBrowserSupabaseForEmpresaData } from "@/lib/supabase/browser-data-client";
-import type { Plan, EstadoPlan, PlanMarketingPlantilla } from "./types";
+import type { Plan, EstadoPlan, IvaTipoPlan, PlanMarketingPlantilla } from "./types";
+
+/** Normaliza el iva_tipo de la fila; default iva_10 (compat con planes previos sin la columna). */
+function normIvaTipo(v: unknown): IvaTipoPlan {
+  const s = typeof v === "string" ? v.trim().toLowerCase() : "";
+  return s === "exenta" || s === "iva_5" ? s : "iva_10";
+}
 
 // ─── Tipos de fila Supabase ───────────────────────────────────────────────────
 
@@ -13,6 +19,7 @@ interface PlanRow {
   precio: number;
   moneda: string;
   periodicidad: string;
+  iva_tipo: string | null;
   limite_usuarios: number | null;
   limite_clientes: number | null;
   limite_facturas: number | null;
@@ -36,6 +43,7 @@ function rowToPlan(row: PlanRow): Plan {
     precio: Number(row.precio),
     moneda: row.moneda as Plan["moneda"],
     periodicidad: row.periodicidad as Plan["periodicidad"],
+    iva_tipo: normIvaTipo(row.iva_tipo),
     limite_usuarios: row.limite_usuarios,
     limite_clientes: row.limite_clientes,
     limite_facturas: row.limite_facturas,
@@ -136,6 +144,7 @@ export async function savePlan(datos: NuevoPlanData): Promise<PlanGuardadoOk | P
         precio: datos.precio,
         moneda: datos.moneda,
         periodicidad: datos.periodicidad,
+        iva_tipo: datos.iva_tipo,
         limite_usuarios: datos.limite_usuarios,
         limite_clientes: datos.limite_clientes,
         limite_facturas: datos.limite_facturas,
@@ -170,6 +179,7 @@ export async function updatePlan(
   if (datos.precio !== undefined) body.precio = datos.precio;
   if (datos.moneda !== undefined) body.moneda = datos.moneda;
   if (datos.periodicidad !== undefined) body.periodicidad = datos.periodicidad;
+  if (datos.iva_tipo !== undefined) body.iva_tipo = datos.iva_tipo;
   if (datos.limite_usuarios !== undefined) body.limite_usuarios = datos.limite_usuarios ?? null;
   if (datos.limite_clientes !== undefined) body.limite_clientes = datos.limite_clientes ?? null;
   if (datos.limite_facturas !== undefined) body.limite_facturas = datos.limite_facturas ?? null;
