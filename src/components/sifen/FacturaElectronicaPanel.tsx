@@ -1047,7 +1047,7 @@ export function FacturaElectronicaPanel({
               {cancelModal === "cancelar_set" ? (
                 <>
                   Se enviará el <b>Evento de Cancelación</b> a SET. Si SET lo aprueba
-                  (código <code>0601</code>), la factura queda anulada también a nivel
+                  (código <code>0600</code>), la factura queda anulada también a nivel
                   fiscal y aparece como cancelada en el libro de ventas electrónicas.
                   Plazo oficial: 48 h desde aprobación.
                 </>

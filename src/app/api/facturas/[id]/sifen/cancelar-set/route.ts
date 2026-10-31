@@ -9,7 +9,7 @@ export const runtime = "nodejs";
  *
  * Envia el Evento de Cancelacion a SET. A diferencia de /cancelar (que solo
  * cambia el estado en el ERP), este endpoint construye el XML del evento, lo
- * firma y lo despacha al endpoint de eventos SIFEN. Si SET aprueba (0601),
+ * firma y lo despacha al endpoint de eventos SIFEN. Si SET aprueba (0600),
  * la factura queda cancelada tambien a nivel fiscal.
  *
  * Plazo oficial SIFEN: 48 hs desde dEmisionDE. Fuera de plazo, SET rechaza
