@@ -128,6 +128,20 @@ function formatFecha(iso: string) {
   return d && m && y ? `${d}/${m}/${y}` : "";
 }
 
+/**
+ * Normaliza el prefijo del número de comprobante para mostrarlo uniforme.
+ * Los registros cargados por el flujo legacy traen prefijo CUOTA-; los del
+ * flujo actual traen FAC- o HIST-. Para el usuario final son todos facturas
+ * de suscripción, así que mostramos todos como FAC-* sin tocar el dato en DB.
+ * Preserva el resto del identificador para no perder trazabilidad.
+ */
+function displayNumeroFactura(numero: string | null | undefined): string {
+  if (!numero) return "";
+  const s = String(numero).trim();
+  if (s.startsWith("CUOTA-")) return "FAC-" + s.slice("CUOTA-".length);
+  return s;
+}
+
 const MESES_ES = [
   "Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio",
   "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre",
@@ -1580,8 +1594,8 @@ export default function ClienteDetalleClient({
             <div className="bg-amber-100/50 border border-amber-200 rounded-lg p-3">
               <p className="text-sm text-amber-900 font-medium mb-2">
                 {bajaPreview.facturas_pendientes_count != null && bajaPreview.facturas_pendientes_count > 1
-                  ? `Este cliente tiene ${bajaPreview.facturas_pendientes_count} facturas con saldo pendiente (ej.: ${bajaPreview.factura_pendiente_mes.numero_factura} — Gs. ${bajaPreview.factura_pendiente_mes.monto?.toLocaleString("es-PY")}).`
-                  : `Este cliente tiene factura pendiente (${bajaPreview.factura_pendiente_mes.numero_factura} — Gs. ${bajaPreview.factura_pendiente_mes.monto?.toLocaleString("es-PY")}).`}
+                  ? `Este cliente tiene ${bajaPreview.facturas_pendientes_count} facturas con saldo pendiente (ej.: ${displayNumeroFactura(bajaPreview.factura_pendiente_mes.numero_factura)} — Gs. ${bajaPreview.factura_pendiente_mes.monto?.toLocaleString("es-PY")}).`
+                  : `Este cliente tiene factura pendiente (${displayNumeroFactura(bajaPreview.factura_pendiente_mes.numero_factura)} — Gs. ${bajaPreview.factura_pendiente_mes.monto?.toLocaleString("es-PY")}).`}
               </p>
               <p className="text-xs text-amber-800 mb-2">
                 ¿Deseas anularlas al dar de baja? (quedarán en estado Anulado y no sumarán en cobranzas)
@@ -1742,8 +1756,8 @@ export default function ClienteDetalleClient({
                 <div className="bg-red-50 border border-red-200 rounded-lg p-3">
                   <p className="text-sm text-red-900 font-medium mb-2">
                     {eliminarPreview.facturas_pendientes_count === 1 && eliminarPreview.factura_ejemplo
-                      ? `Factura con saldo pendiente (${eliminarPreview.factura_ejemplo.numero_factura} — Gs. ${eliminarPreview.factura_ejemplo.monto?.toLocaleString("es-PY")}).`
-                      : `Hay ${eliminarPreview.facturas_pendientes_count} facturas con saldo pendiente${eliminarPreview.factura_ejemplo ? ` (ej.: ${eliminarPreview.factura_ejemplo.numero_factura})` : ""}.`}
+                      ? `Factura con saldo pendiente (${displayNumeroFactura(eliminarPreview.factura_ejemplo.numero_factura)} — Gs. ${eliminarPreview.factura_ejemplo.monto?.toLocaleString("es-PY")}).`
+                      : `Hay ${eliminarPreview.facturas_pendientes_count} facturas con saldo pendiente${eliminarPreview.factura_ejemplo ? ` (ej.: ${displayNumeroFactura(eliminarPreview.factura_ejemplo.numero_factura)})` : ""}.`}
                   </p>
                   <p className="text-xs text-red-800 mb-2">
                     ¿Anularlas al eliminar? (estado Anulado, saldo 0 — no sumarán en cobranzas ni reportería de pendientes)
@@ -2525,7 +2539,7 @@ export default function ClienteDetalleClient({
                         <tr key={f.id} className="hover:bg-slate-50">
                           <td className="px-4 py-3 font-mono text-slate-800">
                             <Link href={`/facturas/${f.id}`} className="text-[#4FAEB2] hover:underline font-semibold">
-                              {f.numero_factura}
+                              {displayNumeroFactura(f.numero_factura)}
                             </Link>
                           </td>
                           <td className="px-4 py-3 text-slate-600">{formatFecha(f.fecha)}</td>
@@ -2546,7 +2560,7 @@ export default function ClienteDetalleClient({
                                     {textoBadgeEstadoFacturaUi(estUi)}
                                   </span>
                                   {carrier ? (
-                                    <p className="text-[10px] text-slate-500">incluida en {carrier.numero_factura}</p>
+                                    <p className="text-[10px] text-slate-500">incluida en {displayNumeroFactura(carrier.numero_factura)}</p>
                                   ) : miembros.length > 0 ? (
                                     <p className="text-[10px] text-slate-500">incluye {miembros.length + 1} meses</p>
                                   ) : null}
@@ -3443,7 +3457,7 @@ export default function ClienteDetalleClient({
           <div className="bg-white rounded-xl shadow-xl max-w-md w-full p-6 max-h-[min(90vh,640px)] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
             <h3 className="text-lg font-bold text-gray-800 mb-1">Registrar cobro</h3>
             <p className="text-xs text-slate-500 mb-3">Cobro en <b>efectivo</b>. El saldo se actualiza al instante.</p>
-            {facturaPago && <p className="text-sm text-slate-600 mb-4">Factura {facturaPago.numero_factura} — Saldo: Gs. {facturaPago.saldo.toLocaleString("es-PY")}</p>}
+            {facturaPago && <p className="text-sm text-slate-600 mb-4">Factura {displayNumeroFactura(facturaPago.numero_factura)} — Saldo: Gs. {facturaPago.saldo.toLocaleString("es-PY")}</p>}
             <form onSubmit={async (e) => {
               e.preventDefault();
               const fid = facturaPago?.id ?? formPago.factura_id;
@@ -3490,7 +3504,7 @@ export default function ClienteDetalleClient({
                   >
                     <option value="">— Seleccionar —</option>
                     {facturas.filter((f) => f.saldo > 0).map((f) => (
-                      <option key={f.id} value={f.id}>{f.numero_factura} — Saldo Gs. {f.saldo.toLocaleString("es-PY")}</option>
+                      <option key={f.id} value={f.id}>{displayNumeroFactura(f.numero_factura)} — Saldo Gs. {f.saldo.toLocaleString("es-PY")}</option>
                     ))}
                   </select>
                 </div>

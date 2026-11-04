@@ -931,6 +931,21 @@ function GestionClientesPageInner() {
       <div
         className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm ring-1 ring-[#4FAEB2]/15"
         style={{ minHeight: "min(560px, calc(100dvh - 10.5rem))" }}
+        // Reenvía la rueda del mouse al scroller interno. Sin esto, cuando el cursor
+        // cae sobre el header/toolbar del panel (que son shrink-0, no scrollean) la
+        // rueda no hace nada: el padre tiene overflow-hidden y el main del shell
+        // está en overscroll-contain. Esto arregla el síntoma "la ruedita a veces
+        // no funciona" reportado desde el operador.
+        onWheel={(e) => {
+          const target = e.target as HTMLElement | null;
+          const scroller = e.currentTarget.querySelector<HTMLDivElement>(
+            "[data-scroller='gestion-cliente']"
+          );
+          if (!scroller) return;
+          // Si el cursor ya está adentro del propio scroller, dejar el comportamiento nativo.
+          if (target && scroller.contains(target)) return;
+          scroller.scrollTop += e.deltaY;
+        }}
       >
         {selected === null ? (
           <div className="flex flex-1 flex-col items-center justify-center gap-5 px-4 py-8">
@@ -1041,7 +1056,7 @@ function GestionClientesPageInner() {
               ) : null}
             </div>
 
-            <div className="min-h-0 flex-1 overflow-y-auto overscroll-y-contain">
+            <div className="min-h-0 flex-1 overflow-y-auto overscroll-y-contain" data-scroller="gestion-cliente">
               <section className="border-b border-slate-200/80 px-3 py-3 sm:px-5 sm:py-4">
                 <div className="flex flex-wrap items-start justify-between gap-3">
                   <div className="min-w-0 space-y-1">
