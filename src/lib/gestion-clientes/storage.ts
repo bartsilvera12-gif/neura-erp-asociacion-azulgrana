@@ -2,6 +2,7 @@ import { fetchWithSupabaseSession } from "@/lib/api/fetch-with-supabase-session"
 import { getCurrentUser } from "@/lib/auth";
 import { toCalendarDateStr } from "@/lib/fechas/calendario";
 import { getBrowserSupabaseForEmpresaData } from "@/lib/supabase/browser-data-client";
+import { displayNumeroFactura } from "@/lib/facturacion/display-numero";
 import type {
   Factura,
   Tipificacion,
@@ -49,7 +50,11 @@ function rowToFactura(row: FacturaRow): Factura {
   return {
     id: row.id,
     cliente_id: row.cliente_id,
-    numero_factura: row.numero_factura,
+    // Normalizamos el prefijo del comprobante al vuelo: los registros del flujo
+    // legacy traen CUOTA-, los del actual traen FAC-/HIST-. Todos son facturas
+    // de suscripción para el usuario, mostrar dos formatos distintos confunde.
+    // El backend sigue leyendo el valor original de DB cuando lo necesita.
+    numero_factura: displayNumeroFactura(row.numero_factura),
     fecha: row.fecha,
     fecha_vencimiento: row.fecha_vencimiento,
     monto: Number(row.monto),
