@@ -2921,7 +2921,7 @@ export default function ClienteDetalleClient({
       {/* Modal "Facturar adelantado": genera cuotas de la suscripción hasta el mes elegido */}
       {modalAdelantar && (
         <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4" onClick={() => !adelantarBusy && setModalAdelantar(false)}>
-          <div className="bg-white rounded-xl shadow-xl max-w-md w-full p-6" onClick={(e) => e.stopPropagation()}>
+          <div className="bg-white rounded-xl shadow-xl max-w-md w-full p-6 max-h-[min(90vh,640px)] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
             <h3 className="text-lg font-bold text-gray-800 mb-1">Facturar adelantado</h3>
             <p className="text-xs text-slate-500 mb-4">
               Genera las cuotas de la suscripción <b>desde este mes hasta el mes que elijas</b> (no duplica: si un mes ya existe, lo saltea). Después las cobrás normalmente.
@@ -2966,7 +2966,7 @@ export default function ClienteDetalleClient({
           className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4"
           onClick={() => setModalFacturaContado(false)}
         >
-          <div className="bg-white rounded-xl shadow-xl max-w-md w-full p-6" onClick={(e) => e.stopPropagation()}>
+          <div className="bg-white rounded-xl shadow-xl max-w-md w-full p-6 max-h-[min(90vh,640px)] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
             <h3 className="text-lg font-bold text-gray-800 mb-1">Nueva factura al contado</h3>
             <p className="text-xs text-slate-500 mb-4">
               Compra puntual: no crea suscripción. El ítem se guarda en el servidor junto con la factura.
@@ -3052,7 +3052,7 @@ export default function ClienteDetalleClient({
           className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4"
           onClick={() => setSuscEditando(null)}
         >
-          <div className="bg-white rounded-xl shadow-xl max-w-md w-full p-6" onClick={(e) => e.stopPropagation()}>
+          <div className="bg-white rounded-xl shadow-xl max-w-md w-full p-6 max-h-[min(90vh,640px)] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
             <h3 className="text-lg font-bold text-gray-800 mb-1">Editar suscripción</h3>
             <p className="text-xs text-slate-500 mb-4">
               Los cambios rigen para las próximas facturas que genere el sistema. Las facturas ya
@@ -3170,7 +3170,7 @@ export default function ClienteDetalleClient({
       {/* Modal Nueva suscripción */}
       {modalSuscripcion && cliente && (
         <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4" onClick={() => setModalSuscripcion(false)}>
-          <div className="bg-white rounded-xl shadow-xl max-w-md w-full p-6" onClick={(e) => e.stopPropagation()}>
+          <div className="bg-white rounded-xl shadow-xl max-w-md w-full p-6 max-h-[min(90vh,640px)] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
             <h3 className="text-lg font-bold text-gray-800 mb-4">Nueva suscripción</h3>
             <form onSubmit={async (e) => {
               e.preventDefault();
@@ -3362,7 +3362,7 @@ export default function ClienteDetalleClient({
       {/* Modal Nueva tarea marketing */}
       {modalNuevaTarea && (
         <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4" onClick={() => setModalNuevaTarea(false)}>
-          <div className="bg-white rounded-xl shadow-xl max-w-md w-full p-6" onClick={(e) => e.stopPropagation()}>
+          <div className="bg-white rounded-xl shadow-xl max-w-md w-full p-6 max-h-[min(90vh,640px)] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
             <h3 className="text-lg font-bold text-gray-800 mb-4">Nueva tarea de marketing</h3>
             <form onSubmit={handleGuardarTarea} className="space-y-4">
               <div>
@@ -3440,7 +3440,7 @@ export default function ClienteDetalleClient({
       {/* Modal Registrar pago */}
       {modalPago && (
         <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4" onClick={() => setModalPago(false)}>
-          <div className="bg-white rounded-xl shadow-xl max-w-md w-full p-6" onClick={(e) => e.stopPropagation()}>
+          <div className="bg-white rounded-xl shadow-xl max-w-md w-full p-6 max-h-[min(90vh,640px)] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
             <h3 className="text-lg font-bold text-gray-800 mb-1">Registrar cobro</h3>
             <p className="text-xs text-slate-500 mb-3">Cobro en <b>efectivo</b>. El saldo se actualiza al instante.</p>
             {facturaPago && <p className="text-sm text-slate-600 mb-4">Factura {facturaPago.numero_factura} — Saldo: Gs. {facturaPago.saldo.toLocaleString("es-PY")}</p>}
@@ -3531,7 +3531,7 @@ export default function ClienteDetalleClient({
       {/* ¡Pago registrado! — WhatsApp del socio + imprimir KuDE */}
       {pagoExito && (
         <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4" onClick={() => setPagoExito(null)}>
-          <div className="bg-white rounded-xl shadow-xl max-w-md w-full p-6" onClick={(e) => e.stopPropagation()}>
+          <div className="bg-white rounded-xl shadow-xl max-w-md w-full p-6 max-h-[min(90vh,640px)] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
             <PagoRegistradoExito
               clienteId={id}
               facturaId={pagoExito.facturaId}
