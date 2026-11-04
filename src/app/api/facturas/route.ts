@@ -7,6 +7,21 @@ import { fechaMasDiasCalendario, fechaVencimientoSuscripcion, toCalendarDateStr 
 import { montosFacturaItemParaInsert, tasaIvaDesdeIvaTipo } from "@/lib/facturacion/factura-item-montos";
 import { descripcionLineaFacturaPorDefecto, parseFacturaPostTipo } from "@/lib/facturacion/factura-post-tipo";
 import { obtenerSiguienteNumeroFacturaEmpresa } from "@/lib/facturacion/factura-suscripcion-servidor";
+import { displayNumeroFactura } from "@/lib/facturacion/display-numero";
+
+/**
+ * Normaliza el prefijo de numero_factura en un objeto de factura para que
+ * el cliente reciba FAC-* uniforme. El dato original queda en base, pero
+ * TODO el frontend (cualquier consumidor del endpoint) ve el valor
+ * normalizado sin tener que tocar cada componente.
+ */
+function normalizarNumeroFacturaRow<T extends Record<string, unknown>>(row: T): T {
+  const n = row?.numero_factura;
+  if (typeof n === "string" && n.length > 0) {
+    return { ...row, numero_factura: displayNumeroFactura(n) };
+  }
+  return row;
+}
 
 
 export async function GET(request: NextRequest) {
@@ -36,7 +51,7 @@ export async function GET(request: NextRequest) {
       return NextResponse.json(errorResponse(error.message), { status: 400 });
     }
 
-    const facturas = (data ?? []) as Record<string, unknown>[];
+    const facturas = ((data ?? []) as Record<string, unknown>[]).map(normalizarNumeroFacturaRow);
     if (facturas.length === 0) {
       return NextResponse.json(successResponse(facturas));
     }
@@ -223,7 +238,7 @@ export async function POST(request: NextRequest) {
     console.log("[API] About to emit event");
     await emitEvent(EVENT_TYPES.factura_creada, { factura_id: data.id, cliente_id: data.cliente_id, monto: data.monto });
 
-    return NextResponse.json(successResponse(data));
+    return NextResponse.json(successResponse(normalizarNumeroFacturaRow(data as Record<string, unknown>)));
   } catch (err) {
     const msg = err instanceof Error ? err.message : "Error";
     return NextResponse.json(errorResponse(msg), { status: 500 });

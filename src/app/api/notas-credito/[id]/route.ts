@@ -4,6 +4,7 @@ import { successResponse, errorResponse } from "@/lib/api/response";
 import { API_ERRORS } from "@/lib/api/errors";
 import type { NotaCreditoGlobalDetailDTO, NotaCreditoEventoAuditoriaDTO } from "@/lib/nota-credito/types";
 import { nombreClienteDisplay } from "@/lib/clientes/display-name";
+import { displayNumeroFactura } from "@/lib/facturacion/display-numero";
 
 function clienteDisplay(c: Record<string, unknown> | null): { id: string; display: string; ruc: string | null } {
   if (!c) return { id: "", display: "—", ruc: null };
@@ -78,7 +79,7 @@ export async function GET(_request: NextRequest, { params }: { params: Promise<{
       cliente: clienteDisplay(cli as Record<string, unknown> | null),
       factura: {
         id: String(f?.id ?? row.factura_id),
-        numero_factura: f?.numero_factura == null ? null : String(f.numero_factura),
+        numero_factura: f?.numero_factura == null ? null : displayNumeroFactura(String(f.numero_factura)),
         fecha: f?.fecha == null ? null : String(f.fecha),
         monto: f?.monto == null ? null : Number(f.monto),
         moneda: f?.moneda == null ? null : String(f.moneda),

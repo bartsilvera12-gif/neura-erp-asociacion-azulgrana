@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getTenantSupabaseFromAuth } from "@/lib/supabase/tenant-api";
 import { successResponse, errorResponse } from "@/lib/api/response";
+import { displayNumeroFactura } from "@/lib/facturacion/display-numero";
 import { API_ERRORS } from "@/lib/api/errors";
 import { toCalendarDateStr } from "@/lib/fechas/calendario";
 import { nombreClienteDisplay } from "@/lib/clientes/display-name";
@@ -183,7 +184,7 @@ export async function GET(request: NextRequest) {
       movs.push({
         fecha: String(f.fecha ?? "").slice(0, 10),
         tipo: "venta",
-        documento: String(f.numero_factura ?? "—"),
+        documento: displayNumeroFactura(f.numero_factura != null ? String(f.numero_factura) : "") || "—",
         contraparte_id: f.cliente_id ? String(f.cliente_id) : null,
         contraparte: "",
         monto: num(f.monto),
@@ -260,7 +261,7 @@ export async function GET(request: NextRequest) {
     }));
 
     const pendientes = pendientesTop.map((f) => ({
-      numero_factura: String(f.numero_factura ?? "—"),
+      numero_factura: displayNumeroFactura(f.numero_factura != null ? String(f.numero_factura) : "") || "—",
       cliente: f.cliente_id ? clienteNombre[String(f.cliente_id)] ?? "—" : "—",
       fecha: String(f.fecha ?? "").slice(0, 10),
       fecha_vencimiento: f.fecha_vencimiento ? String(f.fecha_vencimiento).slice(0, 10) : null,

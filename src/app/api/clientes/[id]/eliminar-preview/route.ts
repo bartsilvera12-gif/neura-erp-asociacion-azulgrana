@@ -3,6 +3,7 @@ import { isAdmin } from "@/lib/middleware/auth";
 import { successResponse, errorResponse } from "@/lib/api/response";
 import { API_ERRORS } from "@/lib/api/errors";
 import { getTenantSupabaseFromAuthWithRol } from "@/lib/supabase/tenant-api";
+import { displayNumeroFactura } from "@/lib/facturacion/display-numero";
 
 /**
  * GET /api/clientes/:id/eliminar-preview
@@ -131,7 +132,7 @@ export async function GET(
           facturasPendientes.length > 0
             ? {
                 id: facturasPendientes[0].id,
-                numero_factura: facturasPendientes[0].numero_factura,
+                numero_factura: displayNumeroFactura(facturasPendientes[0].numero_factura as string),
                 monto: facturasPendientes[0].monto,
               }
             : null,

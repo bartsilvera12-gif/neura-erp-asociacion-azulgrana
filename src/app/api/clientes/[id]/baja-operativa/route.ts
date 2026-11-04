@@ -4,6 +4,7 @@ import { successResponse, errorResponse } from "@/lib/api/response";
 import { API_ERRORS } from "@/lib/api/errors";
 import { getTenantSupabaseFromAuthWithRol } from "@/lib/supabase/tenant-api";
 import { registrarHistorialCliente } from "@/lib/clientes/historial";
+import { displayNumeroFactura } from "@/lib/facturacion/display-numero";
 
 
 /**
@@ -69,7 +70,7 @@ export async function GET(
         facturasPendientes.length > 0
           ? {
               id: facturasPendientes[0].id,
-              numero_factura: facturasPendientes[0].numero_factura,
+              numero_factura: displayNumeroFactura(facturasPendientes[0].numero_factura as string),
               monto: facturasPendientes[0].monto,
             }
           : null,

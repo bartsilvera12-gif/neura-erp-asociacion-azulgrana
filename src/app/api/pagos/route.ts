@@ -5,6 +5,7 @@ import { API_ERRORS } from "@/lib/api/errors";
 import { registrarPago } from "@/lib/pagos/registrar-pago";
 import { etiquetaVisibleTipoServicio } from "@/lib/clientes/tipo-servicio-catalogo";
 import { nombreClienteDisplay } from "@/lib/clientes/display-name";
+import { displayNumeroFactura } from "@/lib/facturacion/display-numero";
 
 type RowFacturaPago = {
   id?: string;
@@ -260,7 +261,7 @@ export async function GET(request: NextRequest) {
 
       return {
         ...p,
-        factura_numero: factura?.numero_factura ?? "—",
+        factura_numero: factura?.numero_factura ? displayNumeroFactura(factura.numero_factura) : "—",
         /** Id del cliente para linkear al vendedor asignado (mapa client-side). */
         cliente_id: clienteId,
         cliente_nombre: cliente ? nombreClienteDisplay(cliente, "—") : "—",

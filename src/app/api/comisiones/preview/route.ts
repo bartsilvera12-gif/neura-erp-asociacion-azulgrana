@@ -24,6 +24,7 @@ import {
   type OverrideDecision,
 } from "@/lib/comisiones/comisionabilidad";
 import { esRolAdminEmpresaOGlobal } from "@/lib/auth/rol-empresa";
+import { displayNumeroFactura } from "@/lib/facturacion/display-numero";
 import { errorResponse, successResponse } from "@/lib/api/response";
 import { createServiceRoleClient } from "@/lib/supabase/service-admin";
 import { isErpRolSupervisor, isErpRolVendedor } from "@/lib/usuarios/erp-rol-normalize";
@@ -503,7 +504,7 @@ export async function GET(request: Request) {
             cliente_id: clienteId || null,
             cliente_label: clienteNombre.get(clienteId) ?? clienteId,
             factura_id: fid,
-            numero_factura: fac.numero_factura ?? null,
+            numero_factura: fac.numero_factura ? displayNumeroFactura(fac.numero_factura) : null,
             pago_id: pagoId,
             fecha,
             monto_base: monto,
@@ -576,7 +577,7 @@ export async function GET(request: Request) {
             cliente_id: clienteId || null,
             cliente_label: clienteNombre.get(clienteId) ?? clienteId,
             factura_id: fid,
-            numero_factura: fac.numero_factura ?? null,
+            numero_factura: fac.numero_factura ? displayNumeroFactura(fac.numero_factura) : null,
             pago_id: null,
             fecha: fac.fecha ?? null,
             monto_base: net,
@@ -657,7 +658,7 @@ export async function GET(request: Request) {
               cliente_id: clienteId || null,
               cliente_label: clienteNombre.get(clienteId) ?? clienteId,
               factura_id: fid,
-              numero_factura: fac.numero_factura ?? null,
+              numero_factura: fac.numero_factura ? displayNumeroFactura(fac.numero_factura) : null,
               pago_id: null,
               fecha: ultima,
               monto_base: net,
@@ -893,7 +894,7 @@ export async function GET(request: Request) {
         cliente_id: clienteId || null,
         cliente_label: clienteNombre.get(clienteId) ?? clienteId,
         factura_id: String(f.id),
-        numero_factura: f.numero_factura ?? null,
+        numero_factura: f.numero_factura ? displayNumeroFactura(f.numero_factura) : null,
         fecha: f.fecha ?? null,
         monto_total: Number(f.monto) || 0,
         saldo_pendiente: roundMoney(saldo),
