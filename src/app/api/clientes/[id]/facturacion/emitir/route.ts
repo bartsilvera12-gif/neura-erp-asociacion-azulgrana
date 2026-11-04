@@ -87,17 +87,34 @@ export async function POST(
     const nextYear = month === 12 ? year + 1 : year;
     const mesSiguiente = `${nextYear}-${String(nextMonth).padStart(2, "0")}`;
 
-    const { data: existentes } = await supabase
+    // Idempotencia: primero por `periodo_facturado` (fuente explícita, igual que el cron
+    // `generarFacturasMensuales`), luego fallback a rango de `fecha` para filas legacy
+    // sin `periodo_facturado`. Esto evita que manual y cron se vean como "períodos distintos".
+    const { data: existentesPeriodo } = await supabase
       .from("facturas")
-      .select("id")
+      .select("id, estado")
       .eq("cliente_id", clienteId)
       .eq("suscripcion_id", susUso.id)
       .eq("empresa_id", auth.empresa_id)
+      .eq("tipo", "suscripcion")
+      .eq("periodo_facturado", mes)
+      .limit(1);
+    const { data: existentesFecha } = await supabase
+      .from("facturas")
+      .select("id, estado")
+      .eq("cliente_id", clienteId)
+      .eq("suscripcion_id", susUso.id)
+      .eq("empresa_id", auth.empresa_id)
+      .eq("tipo", "suscripcion")
+      .is("periodo_facturado", null)
       .gte("fecha", `${mes}-01`)
       .lt("fecha", `${mesSiguiente}-01`)
       .limit(1);
-
-    if (existentes && existentes.length > 0) {
+    const ESTADOS_NO_CUENTAN = new Set(["anulado", "corregida nc"]);
+    const vivos = [...(existentesPeriodo ?? []), ...(existentesFecha ?? [])].filter(
+      (f) => !ESTADOS_NO_CUENTAN.has(String((f as { estado?: string }).estado ?? "").trim().toLowerCase())
+    );
+    if (vivos.length > 0) {
       return NextResponse.json(
         errorResponse("Ya existe una factura emitida para este mes"),
         { status: 409 }
@@ -117,6 +134,7 @@ export async function POST(
         numero_factura: numeroFactura,
         fecha,
         fecha_vencimiento: fechaVenc,
+        periodo_facturado: mes,
         monto,
         saldo: monto,
         estado: "Pendiente",

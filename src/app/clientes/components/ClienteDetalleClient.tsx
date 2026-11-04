@@ -530,12 +530,30 @@ export default function ClienteDetalleClient({
       return;
     }
     const hoy = new Date();
-    const desde = `${hoy.getFullYear()}-${String(hoy.getMonth() + 1).padStart(2, "0")}`;
+    const mesActual = `${hoy.getFullYear()}-${String(hoy.getMonth() + 1).padStart(2, "0")}`;
+    // `desde` = mes siguiente a la última factura de suscripción existente.
+    // Si no hay facturas previas o la última es anterior al mes actual, arranca en el mes actual.
+    // Esto cierra huecos: si el cliente tiene facturado hasta sep y hoy es nov, parte desde oct
+    // (no desde nov), evitando saltar meses como ocurría antes.
+    const ultimoMesFacturado = facturas
+      .filter((f) => f.tipo === "suscripcion" && typeof f.fecha === "string" && /^\d{4}-\d{2}/.test(f.fecha))
+      .map((f) => f.fecha.slice(0, 7))
+      .sort()
+      .pop();
+    let desde = mesActual;
+    if (ultimoMesFacturado) {
+      const [uy, um] = ultimoMesFacturado.split("-").map(Number);
+      const ny = um === 12 ? uy + 1 : uy;
+      const nm = um === 12 ? 1 : um + 1;
+      const siguienteAlUltimo = `${ny}-${String(nm).padStart(2, "0")}`;
+      if (siguienteAlUltimo < mesActual) desde = mesActual;
+      else desde = siguienteAlUltimo;
+    }
     if (mesHastaAdelantar < desde) {
-      setAdelantarMsg({ kind: "err", text: "El mes tiene que ser el actual o uno futuro." });
+      setAdelantarMsg({ kind: "err", text: `Ya está facturado hasta ${ultimoMesFacturado ?? mesActual}. Elegí un mes posterior.` });
       return;
     }
-    // Lista de meses desde el actual hasta el elegido (máx 24 por seguridad).
+    // Lista de meses desde `desde` hasta el elegido (máx 24 por seguridad).
     const meses: string[] = [];
     let [y, m] = desde.split("-").map(Number);
     for (let i = 0; i < 24; i++) {
