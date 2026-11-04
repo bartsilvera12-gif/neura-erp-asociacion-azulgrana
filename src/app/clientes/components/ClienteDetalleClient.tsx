@@ -531,37 +531,61 @@ export default function ClienteDetalleClient({
     }
     const hoy = new Date();
     const mesActual = `${hoy.getFullYear()}-${String(hoy.getMonth() + 1).padStart(2, "0")}`;
-    // `desde` = mes siguiente a la última factura de suscripción existente.
-    // Si no hay facturas previas o la última es anterior al mes actual, arranca en el mes actual.
-    // Esto cierra huecos: si el cliente tiene facturado hasta sep y hoy es nov, parte desde oct
-    // (no desde nov), evitando saltar meses como ocurría antes.
-    const ultimoMesFacturado = facturas
-      .filter((f) => f.tipo === "suscripcion" && typeof f.fecha === "string" && /^\d{4}-\d{2}/.test(f.fecha))
-      .map((f) => f.fecha.slice(0, 7))
-      .sort()
-      .pop();
+    // Set de meses ya emitidos para esta suscripción (excluye anuladas/corregidas si vinieran).
+    const mesesExistentes = new Set<string>(
+      facturas
+        .filter((f) => f.tipo === "suscripcion" && typeof f.fecha === "string" && /^\d{4}-\d{2}/.test(f.fecha))
+        .filter((f) => {
+          const e = String(f.estado ?? "").trim().toLowerCase();
+          return e !== "anulada" && e !== "anulado" && e !== "corregida nc";
+        })
+        .map((f) => f.fecha.slice(0, 7))
+    );
+    // `desde` = el más temprano entre (mes actual) y (mes siguiente a la última factura existente).
+    // Pero NO es suficiente: pueden existir facturas POSTERIORES al hueco (nov, dic) sin que octubre
+    // esté emitido. Por eso iteramos TODO el rango [desde..hasta] y filtramos por los que FALTAN.
+    const mesesExistentesOrdenados = [...mesesExistentes].sort();
+    const ultimoMesEmitido = mesesExistentesOrdenados[mesesExistentesOrdenados.length - 1];
     let desde = mesActual;
-    if (ultimoMesFacturado) {
-      const [uy, um] = ultimoMesFacturado.split("-").map(Number);
+    if (ultimoMesEmitido) {
+      const [uy, um] = ultimoMesEmitido.split("-").map(Number);
       const ny = um === 12 ? uy + 1 : uy;
       const nm = um === 12 ? 1 : um + 1;
       const siguienteAlUltimo = `${ny}-${String(nm).padStart(2, "0")}`;
-      if (siguienteAlUltimo < mesActual) desde = mesActual;
-      else desde = siguienteAlUltimo;
+      // El rango arranca lo antes posible: si hay huecos intermedios, también los agarramos.
+      // Tomamos el mínimo entre el mes actual y el siguiente al último emitido, pero bajamos
+      // aún más si hay meses faltantes en medio del rango de facturas existentes.
+      desde = siguienteAlUltimo < mesActual ? siguienteAlUltimo : mesActual;
+      // Si hay huecos intermedios, bajamos `desde` al primer hueco dentro del rango emitido.
+      const primeroEmitido = mesesExistentesOrdenados[0];
+      if (primeroEmitido) {
+        const [py, pm] = primeroEmitido.split("-").map(Number);
+        let yy = py, mm = pm;
+        for (let i = 0; i < 48; i++) {
+          const key = `${yy}-${String(mm).padStart(2, "0")}`;
+          if (key > mesHastaAdelantar) break;
+          if (!mesesExistentes.has(key)) { desde = key; break; }
+          mm += 1; if (mm > 12) { mm = 1; yy += 1; }
+        }
+      }
     }
     if (mesHastaAdelantar < desde) {
-      setAdelantarMsg({ kind: "err", text: `Ya está facturado hasta ${ultimoMesFacturado ?? mesActual}. Elegí un mes posterior.` });
+      setAdelantarMsg({ kind: "err", text: `Ya está facturado hasta ${ultimoMesEmitido ?? mesActual}. Elegí un mes posterior.` });
       return;
     }
-    // Lista de meses desde `desde` hasta el elegido (máx 24 por seguridad).
+    // Lista de meses desde `desde` hasta el elegido, filtrando los ya existentes.
     const meses: string[] = [];
     let [y, m] = desde.split("-").map(Number);
-    for (let i = 0; i < 24; i++) {
+    for (let i = 0; i < 48; i++) {
       const mm = `${y}-${String(m).padStart(2, "0")}`;
-      meses.push(mm);
+      if (!mesesExistentes.has(mm)) meses.push(mm);
       if (mm === mesHastaAdelantar) break;
       m += 1;
       if (m > 12) { m = 1; y += 1; }
+    }
+    if (meses.length === 0) {
+      setAdelantarMsg({ kind: "ok", text: `Todos los meses hasta ${mesHastaAdelantar} ya están facturados.` });
+      return;
     }
     setAdelantarBusy(true);
     let creadas = 0;
