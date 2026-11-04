@@ -2986,7 +2986,7 @@ export function ConversacionesClient({
           <div
             role="dialog"
             aria-modal="true"
-            className="w-full max-w-md rounded-2xl border border-slate-200 bg-white shadow-xl p-5"
+            className="w-full max-w-md rounded-2xl border border-slate-200 bg-white shadow-xl p-5 max-h-[min(90vh,640px)] overflow-y-auto"
             onClick={(ev) => ev.stopPropagation()}
           >
             <p className="text-sm text-slate-800 font-medium">Confirmar aprobación</p>

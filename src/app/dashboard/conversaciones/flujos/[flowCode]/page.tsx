@@ -2628,7 +2628,7 @@ export default function FlowEditorPage() {
 
       {insertModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40" role="dialog" aria-modal="true">
-          <div className="bg-white rounded-xl shadow-xl max-w-lg w-full p-6 space-y-4 border border-slate-200">
+          <div className="bg-white rounded-xl shadow-xl max-w-lg w-full p-6 space-y-4 border border-slate-200 max-h-[min(90vh,640px)] overflow-y-auto">
             <h2 className="text-lg font-semibold text-slate-800">Insertar paso en el grafo</h2>
             <p className="text-sm text-slate-600">
               Se creará un nuevo paso <strong>entre</strong>{" "}
@@ -2706,7 +2706,7 @@ export default function FlowEditorPage() {
 
       {changeNextModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40" role="dialog" aria-modal="true">
-          <div className="bg-white rounded-xl shadow-xl max-w-md w-full p-6 space-y-4 border border-slate-200">
+          <div className="bg-white rounded-xl shadow-xl max-w-md w-full p-6 space-y-4 border border-slate-200 max-h-[min(90vh,640px)] overflow-y-auto">
             <h2 className="text-lg font-semibold text-slate-800">
               {changeNextModal.kind === "node" ? "Cambiar siguiente paso" : "Cambiar destino de la opción"}
             </h2>

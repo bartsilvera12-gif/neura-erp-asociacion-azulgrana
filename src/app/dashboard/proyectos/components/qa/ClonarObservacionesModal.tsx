@@ -73,7 +73,7 @@ export default function ClonarObservacionesModal({ projectId, onClose, onClonado
         if (e.target === e.currentTarget) onClose();
       }}
     >
-      <div className="w-full rounded-t-2xl bg-white p-5 shadow-xl sm:max-w-md sm:rounded-2xl">
+      <div className="w-full rounded-t-2xl bg-white p-5 shadow-xl sm:max-w-md sm:rounded-2xl max-h-[85vh] overflow-y-auto">
         <div className="flex items-center gap-2">
           <span className="h-5 w-1 rounded-full bg-[#4FAEB2]" />
           <h2 className="text-sm font-semibold text-slate-900">Clonar observaciones</h2>

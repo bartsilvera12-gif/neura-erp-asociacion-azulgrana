@@ -104,7 +104,7 @@ export default function FacturarVentaModal({
       onClick={onClose}
     >
       <div
-        className="w-full max-w-md rounded-2xl border border-slate-200 bg-white p-5 shadow-xl"
+        className="w-full max-w-md rounded-2xl border border-slate-200 bg-white p-5 shadow-xl max-h-[min(90vh,640px)] overflow-y-auto"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="mb-3 flex items-center justify-between">

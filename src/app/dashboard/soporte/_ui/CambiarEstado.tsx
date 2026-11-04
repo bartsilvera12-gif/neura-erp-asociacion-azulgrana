@@ -102,7 +102,7 @@ export default function CambiarEstado({ alCerrar }: { alCerrar: () => void }) {
         aria-modal="true"
         aria-label="Cambiar estado"
         onClick={(e) => e.stopPropagation()}
-        className="w-full max-w-lg rounded-xl border border-slate-200 bg-white shadow-xl"
+        className="w-full max-w-lg rounded-xl border border-slate-200 bg-white shadow-xl max-h-[min(90vh,640px)] overflow-y-auto"
       >
         <div className="flex items-center justify-between border-b border-slate-100 px-5 py-3.5">
           <h2 className="text-[15px] font-semibold text-slate-900">Cambiar estado</h2>

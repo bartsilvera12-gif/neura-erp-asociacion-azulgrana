@@ -90,7 +90,7 @@ export function CondonarSaldoButton({
           aria-modal="true"
           onClick={() => !submitting && setOpen(false)}
         >
-          <div className="w-full max-w-md space-y-3 rounded-xl border border-slate-200 bg-white p-5 shadow-xl" onClick={(e) => e.stopPropagation()}>
+          <div className="w-full max-w-md space-y-3 rounded-xl border border-slate-200 bg-white p-5 shadow-xl max-h-[min(90vh,640px)] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
             <h4 className="text-sm font-bold text-slate-900">Condonar saldo{numeroFactura ? ` — ${numeroFactura}` : ""}</h4>
             <p className="text-xs leading-relaxed text-slate-600">
               Cierra el <span className="font-semibold">saldo pendiente de Gs. {fmt(saldo)}</span>: lo pone en 0 y marca la

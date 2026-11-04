@@ -1362,7 +1362,7 @@ function ClonarModal({
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 p-4" onClick={onClose}>
       <div
-        className="w-full max-w-md rounded-2xl bg-white p-5 shadow-xl"
+        className="w-full max-w-md rounded-2xl bg-white p-5 shadow-xl max-h-[min(90vh,640px)] overflow-y-auto"
         onClick={(e) => e.stopPropagation()}
       >
         <h3 className="text-base font-semibold text-slate-900">Clonar QA desde otro proyecto</h3>

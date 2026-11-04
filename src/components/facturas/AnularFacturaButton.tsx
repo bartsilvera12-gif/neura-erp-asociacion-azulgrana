@@ -92,7 +92,7 @@ export function AnularFacturaButton({
           onClick={() => !submitting && setOpen(false)}
         >
           <div
-            className="w-full max-w-md space-y-3 rounded-xl border border-slate-200 bg-white p-5 shadow-xl"
+            className="w-full max-w-md space-y-3 rounded-xl border border-slate-200 bg-white p-5 shadow-xl max-h-[min(90vh,640px)] overflow-y-auto"
             onClick={(e) => e.stopPropagation()}
           >
             <h4 id="anular-factura-title" className="text-sm font-bold text-slate-900">

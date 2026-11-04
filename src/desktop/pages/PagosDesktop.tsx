@@ -844,7 +844,7 @@ export default function PagosPage() {
       {/* Anular cobro en efectivo (admin): borra el cobro y devuelve el saldo */}
       {anularPago && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={() => !anulando && setAnularPago(null)} role="presentation">
-          <div className="w-full max-w-md rounded-xl bg-white p-6 shadow-xl" onClick={(e) => e.stopPropagation()} role="dialog" aria-modal="true">
+          <div className="w-full max-w-md rounded-xl bg-white p-6 shadow-xl max-h-[min(90vh,640px)] overflow-y-auto" onClick={(e) => e.stopPropagation()} role="dialog" aria-modal="true">
             <h3 className="mb-1 text-lg font-bold text-gray-800">Anular cobro en efectivo</h3>
             <p className="mb-3 text-sm text-slate-600">
               Factura <b>{anularPago.factura_numero}</b> — Gs. {anularPago.monto.toLocaleString("es-PY")} ({anularPago.cliente_nombre}).

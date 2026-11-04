@@ -367,7 +367,7 @@ export default function ConciliacionClient() {
 
       {anularTarget && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={() => !anularBusy && setAnularTarget(null)}>
-          <div className="w-full max-w-md rounded-2xl bg-white shadow-xl" onClick={(e) => e.stopPropagation()}>
+          <div className="w-full max-w-md rounded-2xl bg-white shadow-xl max-h-[min(90vh,640px)] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
             <div className="flex items-start justify-between gap-3 border-b p-4">
               <div>
                 <h3 className="text-lg font-semibold text-slate-900">Anular transferencia aprobada</h3>
@@ -438,7 +438,7 @@ export default function ConciliacionClient() {
 
       {reporte && (
         <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/40 p-4" onClick={() => setReporte(null)}>
-          <div className="my-6 w-full max-w-3xl rounded-2xl bg-white shadow-xl" onClick={(e) => e.stopPropagation()}>
+          <div className="my-6 w-full max-w-3xl rounded-2xl bg-white shadow-xl max-h-[min(90vh,640px)] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
             <div className="flex items-start justify-between gap-3 border-b p-4">
               <div className="min-w-0">
                 <h3 className="text-lg font-semibold text-slate-900">Conciliación del extracto</h3>
@@ -597,7 +597,7 @@ function ModalRegistrar({ facturas, onClose, onSaved }: { facturas: Factura[]; o
 
   return (
     <div className="fixed inset-0 z-[120] flex items-start justify-center bg-slate-900/60 px-0 pt-0 backdrop-blur-sm sm:px-4 sm:pt-16" onClick={onClose}>
-      <div className="w-full max-w-lg rounded-none border-0 bg-white p-5 shadow-2xl sm:rounded-2xl sm:border" onClick={(e) => e.stopPropagation()}>
+      <div className="w-full max-w-lg rounded-none border-0 bg-white p-5 shadow-2xl sm:rounded-2xl sm:border max-h-[min(90vh,640px)] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
         <div className="mb-4 flex items-center justify-between">
           <h2 className="text-lg font-semibold text-slate-900">Registrar transferencia</h2>
           <button onClick={onClose} className="rounded-lg px-2 py-1 text-slate-400 hover:bg-slate-100 hover:text-slate-700">✕</button>

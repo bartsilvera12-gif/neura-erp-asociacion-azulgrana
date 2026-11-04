@@ -121,7 +121,7 @@ export default function SorteoCuponesPagoCell({ entradaId, estadoPago }: Props) 
               onClick={() => !busy && closeAll()}
             >
               <div
-                className="w-full max-w-sm rounded-xl border border-slate-200 bg-white p-5 shadow-xl"
+                className="w-full max-w-sm rounded-xl border border-slate-200 bg-white p-5 shadow-xl max-h-[min(90vh,640px)] overflow-y-auto"
                 onClick={(e) => e.stopPropagation()}
               >
                 <h2 id="cupon-pago-dialog-title" className="text-base font-semibold text-slate-800">

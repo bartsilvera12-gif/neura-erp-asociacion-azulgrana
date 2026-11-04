@@ -134,7 +134,7 @@ export function AnularCobroButton({
           aria-modal="true"
           onClick={() => !anulandoId && setOpen(false)}
         >
-          <div className="w-full max-w-md space-y-3 rounded-xl border border-slate-200 bg-white p-5 shadow-xl" onClick={(e) => e.stopPropagation()}>
+          <div className="w-full max-w-md space-y-3 rounded-xl border border-slate-200 bg-white p-5 shadow-xl max-h-[min(90vh,640px)] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
             <h4 className="text-sm font-bold text-slate-900">Anular cobro{numeroFactura ? ` — ${numeroFactura}` : ""}</h4>
             <p className="text-xs leading-relaxed text-slate-600">
               Al anular un cobro, <span className="font-semibold">el saldo vuelve a la factura</span>. Solo se listan cobros en

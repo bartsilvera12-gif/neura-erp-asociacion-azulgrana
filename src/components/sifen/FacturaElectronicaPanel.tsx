@@ -1035,7 +1035,7 @@ export function FacturaElectronicaPanel({
           aria-modal="true"
           aria-labelledby="sifen-cancel-title"
         >
-          <div className="bg-white rounded-xl shadow-xl max-w-md w-full p-5 space-y-4 border border-slate-200">
+          <div className="bg-white rounded-xl shadow-xl max-w-md w-full p-5 space-y-4 border border-slate-200 max-h-[min(90vh,640px)] overflow-y-auto">
             <h4 id="sifen-cancel-title" className="text-sm font-bold text-slate-900">
               {cancelModal === "cancelar_set"
                 ? "Cancelar en SET (envío oficial)"

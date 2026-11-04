@@ -893,7 +893,7 @@ function PromesaModal({
   const [fecha, setFecha] = useState(hoyLocal);
   return (
     <div className="fixed inset-0 z-[60] flex items-center justify-center bg-slate-900/40 p-4" onClick={onCancel}>
-      <div className="w-full max-w-sm rounded-2xl border border-slate-200 bg-white p-5 shadow-xl" onClick={(e) => e.stopPropagation()}>
+      <div className="w-full max-w-sm rounded-2xl border border-slate-200 bg-white p-5 shadow-xl max-h-[min(90vh,640px)] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
         <h3 className="text-base font-semibold text-slate-900">Agregar promesa de pago</h3>
         <p className="mt-1 text-xs text-slate-500">Fecha en que el cliente se comprometió a pagar.</p>
         <label className="mt-4 block">
@@ -1020,7 +1020,7 @@ function RegistrarPagoModal({
 
   return (
     <div className="fixed inset-0 z-[60] flex items-center justify-center bg-slate-900/40 p-4" onClick={onCancel}>
-      <div className="w-full max-w-md rounded-2xl border border-slate-200 bg-white p-5 shadow-xl" onClick={(e) => e.stopPropagation()}>
+      <div className="w-full max-w-md rounded-2xl border border-slate-200 bg-white p-5 shadow-xl max-h-[min(90vh,640px)] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
         <h3 className="text-base font-semibold text-slate-900">Registrar cobro</h3>
         <p className="mt-0.5 text-[11px] text-slate-500">
           Cobro por transferencia. Queda <b>pendiente de aprobación</b> en Conciliación bancaria.

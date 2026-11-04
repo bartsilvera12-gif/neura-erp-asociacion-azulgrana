@@ -655,7 +655,7 @@ function OverrideModal({
   const accion = target.decision === "excluir" ? "Excluir de comisión" : "Incluir en comisión";
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 p-4">
-      <div className="w-full max-w-md rounded-2xl border border-slate-200 bg-white p-5 shadow-xl">
+      <div className="w-full max-w-md rounded-2xl border border-slate-200 bg-white p-5 shadow-xl max-h-[min(90vh,640px)] overflow-y-auto">
         <h3 className="text-base font-semibold text-slate-900">{accion}</h3>
         <p className="mt-1 text-xs text-slate-500">
           {target.ln.cliente_label} · {target.ln.numero_factura ?? "—"} · ₲ {fmtMoney(target.ln.monto_base)}
