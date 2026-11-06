@@ -136,7 +136,11 @@ export async function loadValidatedNotaCreditoSifenPayload(
     return { ok: false, error: { status: vOrigen.status, message: vOrigen.message } };
   }
 
-  const fechaNc = String((factura as { fecha: string }).fecha).trim().slice(0, 10);
+  // La nota de crédito se emite con la fecha de HOY (no la de la factura origen).
+  // La factura origen puede estar fechada antes del inicio de vigencia de su
+  // timbrado (p. ej. una cuota consolidada retro-fechada emitida meses después),
+  // y la SET exige que el DE de la NC se emita dentro de la vigencia del timbrado.
+  const fechaNc = new Date().toLocaleDateString("en-CA", { timeZone: "America/Asuncion" });
   if (fechaNc < vOrigen.fiscal.timbrado_fecha_inicio_vigencia_iso) {
     return {
       ok: false,
@@ -237,7 +241,7 @@ export async function loadValidatedNotaCreditoSifenPayload(
       id: String((nc as { id: string }).id),
       monto: Number((nc as { monto: unknown }).monto),
       motivo: String((nc as { motivo: string }).motivo ?? "").trim(),
-      fecha_emision: String((factura as { fecha: string }).fecha).trim(),
+      fecha_emision: fechaNc,
     },
     facturaOrigen: {
       numero_factura: String((factura as { numero_factura: string }).numero_factura),
