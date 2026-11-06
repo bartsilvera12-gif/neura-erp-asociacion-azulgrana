@@ -128,7 +128,16 @@ export async function evaluateNotaCreditoCreationGate(
       .select("sifen_plazo_cancelacion_horas")
       .eq("empresa_id", empresaId)
       .maybeSingle(),
-    supabase.from("pagos").select("monto").eq("factura_id", facturaId).eq("empresa_id", empresaId),
+    // Excluir pagos revertidos (estado_contable='revertido'): ya devolvieron su
+    // saldo a la factura, así que no deben contar en la suma de pagos. Sin esto, el
+    // gate bloquea la NC tras anular un cobro ("el saldo no coincide con monto−pagos").
+    // Complementa el fix 6c29608 que ya lo aplicó en create-nota-credito y cancelar.
+    supabase
+      .from("pagos")
+      .select("monto")
+      .eq("factura_id", facturaId)
+      .eq("empresa_id", empresaId)
+      .neq("estado_contable", "revertido"),
   ]);
 
   if (pagosRes.error) {
