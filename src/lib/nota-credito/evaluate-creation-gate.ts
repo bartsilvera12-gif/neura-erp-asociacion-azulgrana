@@ -166,7 +166,12 @@ export async function evaluateNotaCreditoCreationGate(
     nowMs: Date.now(),
   });
 
-  if (preview.puede_cancelar) {
+  // Si la SET ya RECHAZÓ la cancelación del DE (set_cancelacion_estado='rechazado'),
+  // cancelar ya no es una opción real aunque el plazo nominal siga abierto: el
+  // evento de cancelación ya está registrado en la SET ("CDC ya se encuentra con el
+  // mismo evento solicitado") y no se vuelve a aceptar. En ese caso la NC es el
+  // único camino, así que no bloqueamos la creación derivando a cancelación.
+  if (preview.puede_cancelar && setCancEstado !== "rechazado") {
     return {
       puede_crear: false,
       motivo_bloqueo:

@@ -169,7 +169,11 @@ export async function createNotaCreditoBorrador(p: CreateNotaCreditoParams): Pro
     nowMs: Date.now(),
   });
 
-  if (preview.puede_cancelar) {
+  // Si la SET ya RECHAZÓ la cancelación del DE (set_cancelacion_estado='rechazado'),
+  // cancelar ya no es viable aunque el plazo nominal siga abierto (el evento ya está
+  // registrado en la SET y no se reacepta). Ahí la NC es el único camino, así que no
+  // derivamos a cancelación. Coherente con el gate (evaluate-creation-gate).
+  if (preview.puede_cancelar && setCancEstado !== "rechazado") {
     return {
       ok: false,
       status: 409,
