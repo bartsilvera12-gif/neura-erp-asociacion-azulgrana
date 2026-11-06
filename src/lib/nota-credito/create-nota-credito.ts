@@ -133,7 +133,7 @@ export async function createNotaCreditoBorrador(p: CreateNotaCreditoParams): Pro
       .maybeSingle(),
     p.supabase
       .from("pagos")
-      .select("monto")
+      .select("monto, estado_contable")
       .eq("factura_id", p.facturaId)
       .eq("empresa_id", p.empresaId),
   ]);
@@ -142,7 +142,11 @@ export async function createNotaCreditoBorrador(p: CreateNotaCreditoParams): Pro
     return { ok: false, status: 400, error: pagosRes.error.message };
   }
 
-  const pagosRows = (pagosRes.data ?? []) as { monto?: unknown }[];
+  // Excluir pagos revertidos del cálculo: no son dinero cobrado, no deben restar
+  // del monto para validar consistencia saldo == monto - pagos. Antes del fix se
+  // sumaban y disparaban falsos mismatches que bloqueaban emitir NC.
+  const pagosRows = ((pagosRes.data ?? []) as { monto?: unknown; estado_contable?: unknown }[])
+    .filter((r) => String(r.estado_contable ?? "").toLowerCase() !== "revertido");
   const pagosCount = pagosRows.length;
   const sumaPagos = pagosRows.reduce((s, r) => s + num(r.monto), 0);
 

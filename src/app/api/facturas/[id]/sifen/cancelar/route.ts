@@ -79,7 +79,10 @@ export async function POST(
         .from("pagos")
         .select("id", { count: "exact", head: true })
         .eq("factura_id", fid)
-        .eq("empresa_id", auth.empresa_id),
+        .eq("empresa_id", auth.empresa_id)
+        // Excluir pagos revertidos: no son dinero cobrado real, no deben bloquear
+        // la cancelación del DE. Alineado con el fix de createNotaCreditoBorrador.
+        .neq("estado_contable", "revertido"),
     ]);
 
     if (pagosRes.error) {
