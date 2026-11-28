@@ -276,8 +276,15 @@ async function handleCancelarSetPostInner(
   const codLote = (findInTree(setRespParsed, "dCodRes") ?? "").trim();
   const msgEve = (findInTree(setRespParsed, "dMsgResEve") ?? findInTree(setRespParsed, "dMsgRes") ?? "").trim();
   const protAut = (findInTree(setRespParsed, "dProtAut") ?? "").trim() || null;
-  const aprobado = codEve === "0601" || codLote === "0601";
-  const loteRechazado = codLote !== "" && codLote !== "0300" && codLote !== "0601";
+  // SIFEN aprueba el Evento de Cancelacion con el codigo 0600 ("Evento
+  // registrado correctamente"), NO 0601 (eso era un error historico del modulo
+  // que marcaba como rechazada toda cancelacion que SI habia sido aceptada).
+  // Confirmado contra la doc de FacturaSend (mismas libs TIPS): respuesta OK =
+  // { dCodRes: "0600", dMsgRes: "Evento registrado correctamente" }.
+  const aprobado = codEve === "0600" || codLote === "0600";
+  // 0300 = lote recibido (en curso); 0600 = evento aprobado. Cualquier otro
+  // codigo de lote distinto de esos es un rechazo real.
+  const loteRechazado = codLote !== "" && codLote !== "0300" && codLote !== "0600";
   const nuevoSetEstado: "enviado" | "aprobado" | "rechazado" = aprobado
     ? "aprobado"
     : codEve || loteRechazado
